@@ -7,7 +7,7 @@ struct MenuBarView: View {
     let openSettings: () -> Void
 
     @StateObject private var loginItem = LoginItemManager()
-    @StateObject private var screenCleanerState = ScreenCleanerState()
+    @ObservedObject private var screenCleanerState = ScreenCleanerState.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,9 +79,7 @@ struct MenuBarView: View {
             ) {
                 screenCleanerState.onDeactivateExtra = { [weak appDelegate = NSApp.delegate as? AppDelegate] in
                     // 返回侧边栏：重新弹出 popover
-                    if let button = appDelegate?.statusItem?.button {
-                        appDelegate?.showStatusPopover(relativeTo: button)
-                    }
+                    appDelegate?.showStatusPopover()
                 }
                 screenCleanerState.activate()
             }

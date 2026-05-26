@@ -52,12 +52,7 @@ final class QuickSwitcherController: ObservableObject {
     private var keyMonitor: Any?
     private var isHotkeyHeld = false
 
-    // Screen cleaner state
-    private lazy var screenCleanerState: ScreenCleanerState = {
-        let state = ScreenCleanerState()
-        state.onDeactivateExtra = nil
-        return state
-    }()
+    private let screenCleanerState = ScreenCleanerState.shared
 
     private init() {}
 
@@ -350,6 +345,7 @@ final class QuickSwitcherController: ObservableObject {
             screenCleanerState.deactivate()
             sendTransientNotification(title: "屏幕清洁已退出", body: "按任意键或点击即可退出")
         } else {
+            screenCleanerState.onDeactivateExtra = nil
             sendTransientNotification(title: "屏幕清洁已开启", body: "按任意键或点击即可退出")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.screenCleanerState.activate()
@@ -454,11 +450,7 @@ final class QuickSwitcherController: ObservableObject {
         return NSScreen.main ?? NSScreen.screens.first
     }
 
-    func startListening() {}
 
-    func stopListening() {
-        hide()
-    }
 }
 
 // MARK: - Helper TextField

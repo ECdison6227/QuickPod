@@ -1,5 +1,4 @@
 import AppKit
-import Foundation
 import UserNotifications
 
 class BreakReminder: NSObject, ObservableObject {
@@ -153,71 +152,95 @@ class BreakReminder: NSObject, ObservableObject {
     }
     
     private var reminderTimer: Timer?
+    private var postponeWorkItem: DispatchWorkItem?
     
     private func scheduleAlertReminder() {
         reminderTimer?.invalidate()
         reminderTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(intervalMinutes * 60), repeats: true) { [weak self] _ in
-            self?.showBreakReminderAlert()
+            DispatchQueue.main.async {
+                self?.showBreakReminderAlert()
+            }
         }
     }
     
     private func showBreakReminderAlert() {
         playReminderSound()
         
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
-            let alert = NSAlert()
-            alert.alertStyle = .informational
-            alert.messageText = "该休息啦"
-            alert.informativeText = "已经工作 \(self.intervalMinutes) 分钟了，起来活动一下吧"
-            alert.addButton(withTitle: "知道了")
-            alert.addButton(withTitle: "延后 5 分钟")
-            alert.addButton(withTitle: "延后 10 分钟")
-            
-            // 激活应用
-            NSApp.activate(ignoringOtherApps: true)
-            
-            let response = alert.runModal()
-            switch response {
-            case .alertSecondButtonReturn:
-                // 延后5分钟
-                self.postponeReminder(minutes: 5)
-            case .alertThirdButtonReturn:
-                // 延后10分钟
-                self.postponeReminder(minutes: 10)
-            default:
-                break
-            }
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "该休息啦"
+        alert.informativeText = "已经工作 \(intervalMinutes) 分钟了，起来活动一下吧"
+        alert.addButton(withTitle: "知道了")
+        alert.addButton(withTitle: "延后 5 分钟")
+        alert.addButton(withTitle: "延后 10 分钟")
+        
+        NSApp.activate(ignoringOtherApps: true)
+        
+        let response = alert.runModal()
+        switch response {
+        case .alertSecondButtonReturn:
+            postponeReminder(minutes: 5)
+        case .alertThirdButtonReturn:
+            postponeReminder(minutes: 10)
+        default:
+            break
         }
     }
     
     private func playReminderSound() {
-        // 使用系统声音
         NSSound.beep()
     }
     
     func postponeReminder(minutes: Int) {
-        // 停止当前提醒
-        stop()
+        center.removePendingNotificationRequests(withIdentifiers: [notificationIdentifier])
+        reminderTimer?.invalidate()
+        reminderTimer = nil
+        postponeWorkItem?.cancel()
+        postponeWorkItem = nil
         
-        // 设置新的间隔并重新开始
         let originalInterval = intervalMinutes
-        intervalMinutes = minutes
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + TimeInterval(minutes * 60)) { [weak self] in
-            guard let self = self else { return }
-            self.intervalMinutes = originalInterval
-            self.start()
+        if reminderStyle == .systemNotification || reminderStyle == .both {
+            let content = UNMutableNotificationContent()
+            content.title = "该休息啦"
+            content.body = "已经工作 \(originalInterval) 分钟了，起来活动一下吧"
+            content.sound = .default
+            content.interruptionLevel = .timeSensitive
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: TimeInterval(minutes * 60),
+                repeats: false
+            )
+            let request = UNNotificationRequest(
+                identifier: notificationIdentifier,
+                content: content,
+                trigger: trigger
+            )
+            center.add(request)
         }
         
-        start(withInterval: minutes)
+        if reminderStyle == .alertWindow || reminderStyle == .both {
+            reminderTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(minutes * 60), repeats: false) { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.showBreakReminderAlert()
+                }
+            }
+        }
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, self.isActive else { return }
+            self.intervalMinutes = originalInterval
+            self.scheduleNotifications()
+        }
+        postponeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + TimeInterval(minutes * 60), execute: workItem)
     }
 
     func stop() {
         center.removePendingNotificationRequests(withIdentifiers: [notificationIdentifier])
         reminderTimer?.invalidate()
         reminderTimer = nil
+        postponeWorkItem?.cancel()
+        postponeWorkItem = nil
         isActive = false
     }
 
@@ -238,7 +261,7 @@ extension BreakReminder: UNUserNotificationCenterDelegate {
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         // 确保通知总是显示
-        completionHandler([.alert, .sound, .badge])
+        completionHandler([.banner, .list, .sound])
     }
     
     func userNotificationCenter(_ center: UNUserNotificationCenter,

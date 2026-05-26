@@ -7,7 +7,7 @@ struct MainWindowView: View {
     @ObservedObject var antiSleep: AntiSleepManager
     @ObservedObject var breakReminder: BreakReminder
     @StateObject private var loginItem = LoginItemManager()
-    @StateObject private var screenCleanerState = ScreenCleanerState()
+    @ObservedObject private var screenCleanerState = ScreenCleanerState.shared
     @StateObject private var permissionManager = PermissionManager()
 
     @State private var defaultFileName: String = FileCreator.defaultFileName
@@ -346,13 +346,7 @@ struct MainWindowView: View {
                     action: { permissionManager.openAccessibilitySettings() }
                 )
                 thinDivider
-                PermissionRow(
-                    title: "开机启动",
-                    description: "登录时自动启动",
-                    status: permissionManager.loginItemPermission,
-                    action: { permissionManager.openLoginItemsSettings() }
-                )
-            }
+        }
         }
     }
 
@@ -593,6 +587,7 @@ struct LiquidPillButtonStyle: ButtonStyle {
 // MARK: - Screen Cleaner State Wrapper
 
 class ScreenCleanerState: ObservableObject {
+    static let shared = ScreenCleanerState()
     private var cleaner = ScreenCleaner()
     @Published var isActive = false
 

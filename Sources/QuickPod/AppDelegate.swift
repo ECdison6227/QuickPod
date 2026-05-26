@@ -9,7 +9,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     private var mainWindow: NSWindow!
     private var statusPopover: NSPopover!
-    private var onboardingWindow: NSWindow?
     private var reopenObserver: NSObjectProtocol?
     private var singleInstanceLockFD: Int32 = -1
     private lazy var globalHotkey = GlobalHotkey(
@@ -42,17 +41,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusBar()
         setupMainWindow()
         setupGlobalHotkey()
-        setupQuickSwitcher()
         requestNotificationPermission()
         breakReminder.prepareOnLaunch()
-        
-        // 检查是否需要显示引导动画
-        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "QuickPod.hasCompletedOnboarding")
-        if !hasCompletedOnboarding {
-            showOnboardingWindow()
-        } else {
-            showMainWindow()
-        }
+        showMainWindow()
 
         if ProcessInfo.processInfo.arguments.contains("--show-radial-on-launch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
@@ -72,77 +63,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func showOnboardingWindow() {
-        struct OnboardingWrapper: View {
-            let completion: () -> Void
-            
-            var body: some View {
-                OnboardingAnimationView(isPresented: .constant(true))
-                    .onDisappear {
-                        completion()
-                    }
-            }
-        }
-        
-        let wrapperView = OnboardingWrapper { [weak self] in
-            self?.onboardingWindow?.orderOut(nil)
-            self?.onboardingWindow = nil
-            self?.showMainWindow()
-        }
-        
-        let hostingView = NSHostingView(rootView: wrapperView)
-        let size = NSSize(width: 440, height: 640)
-        hostingView.frame = NSRect(origin: .zero, size: size)
-        hostingView.autoresizingMask = NSView.AutoresizingMask([.width, .height])
-        
-        let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let windowRect = NSRect(
-            x: (screenFrame.width - size.width) / 2,
-            y: (screenFrame.height - size.height) / 2,
-            width: size.width,
-            height: size.height
-        )
-        
-        let window = NSWindow(
-            contentRect: windowRect,
-            styleMask: [.titled, .closable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.setContentSize(size)
-        window.contentView = hostingView
-        window.title = "QuickPod"
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.hasShadow = true
-        window.center()
-        window.level = .floating
-        
-        onboardingWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     // MARK: - Status Bar
 
     private func setupStatusBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            // 统一使用闪电图标作为状态栏图标，根据防睡眠状态变化颜色
             updateStatusBarIcon()
-            button.action = #selector(toggleMainWindow)
-            button.sendAction(on: [.leftMouseDown])
+            button.action = #selector(toggleStatusPopover)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-
-        // 右键菜单
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "设置", action: #selector(toggleMainWindow), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "退出 QuickPod", action: #selector(quitApp), keyEquivalent: ""))
-        statusItem.menu = menu
 
         let popoverView = MenuBarView(
             antiSleep: antiSleep,
@@ -158,7 +88,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusPopover.contentSize = NSSize(width: 300, height: 390)
         statusPopover.contentViewController = NSHostingController(rootView: popoverView)
 
-        // 监听防睡眠状态变化，更新图标
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(updateStatusBarIcon),
@@ -265,21 +194,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if statusPopover.isShown {
             statusPopover.performClose(nil)
         } else {
-            // 计算弹出位置，使箭头居中对齐到图标
-            let iconWidth: CGFloat = 18
-            let offsetX = (button.bounds.width - iconWidth) / 2 + iconWidth / 2
-            let popoverRect = NSRect(x: offsetX - 4, y: 0, width: 8, height: button.bounds.height)
-            statusPopover.show(relativeTo: popoverRect, of: button, preferredEdge: .minY)
+            statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             statusPopover.contentViewController?.view.window?.makeKey()
         }
     }
 
-    func showStatusPopover(relativeTo button: NSStatusBarButton) {
+    func showStatusPopover() {
+        guard let button = statusItem.button else { return }
         if !statusPopover.isShown {
-            let iconWidth: CGFloat = 18
-            let offsetX = (button.bounds.width - iconWidth) / 2 + iconWidth / 2
-            let popoverRect = NSRect(x: offsetX - 4, y: 0, width: 8, height: button.bounds.height)
-            statusPopover.show(relativeTo: popoverRect, of: button, preferredEdge: .minY)
+            statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             statusPopover.contentViewController?.view.window?.makeKey()
         }
     }
@@ -302,13 +225,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
-            showMainWindow()
-        }
-        return true
-    }
-
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
@@ -321,12 +237,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func reconfigureHotkey() {
         globalHotkey.reconfigure()
-    }
-
-    // MARK: - Quick Switcher (Fn+Option 长按)
-
-    private func setupQuickSwitcher() {
-        QuickSwitcherController.shared.startListening()
     }
 
     // MARK: - 通知权限
@@ -436,6 +346,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         releaseSingleInstanceLock()
         globalHotkey.unregister()
-        QuickSwitcherController.shared.stopListening()
+        QuickSwitcherController.shared.hide()
     }
 }

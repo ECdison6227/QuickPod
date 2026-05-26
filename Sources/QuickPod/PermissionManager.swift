@@ -6,7 +6,6 @@ import ServiceManagement
 class PermissionManager: ObservableObject {
     @Published var notificationPermission: PermissionStatus = .unknown
     @Published var accessibilityPermission: PermissionStatus = .unknown
-    @Published var loginItemPermission: PermissionStatus = .unknown
     
     enum PermissionStatus {
         case granted
@@ -18,7 +17,6 @@ class PermissionManager: ObservableObject {
     func checkAllPermissions() {
         checkNotificationPermission()
         checkAccessibilityPermission()
-        checkLoginItemPermission()
     }
     
     func checkNotificationPermission() {
@@ -46,29 +44,6 @@ class PermissionManager: ObservableObject {
         }
     }
     
-    func checkLoginItemPermission() {
-        let url = Bundle.main.bundleURL
-        let identifier = "com.quickpod.app"
-        
-        if let jobDictionaries = SMCopyAllJobDictionaries(kSMDomainUserLaunchd).takeRetainedValue() as? [[String: Any]] {
-            let isInLoginItems = jobDictionaries.contains { dict in
-                if let jobURL = dict["ProgramArguments"] as? [String],
-                   let firstArg = jobURL.first,
-                   firstArg.contains(url.lastPathComponent) {
-                    return true
-                }
-                return false
-            }
-            DispatchQueue.main.async { [weak self] in
-                self?.loginItemPermission = isInLoginItems ? .granted : .notDetermined
-            }
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.loginItemPermission = .unknown
-            }
-        }
-    }
-    
     func openNotificationSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
             NSWorkspace.shared.open(url)
@@ -79,23 +54,6 @@ class PermissionManager: ObservableObject {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
-    }
-    
-    func openLoginItemsSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        } else {
-            // 备用路径
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.users") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-    }
-    
-    var allPermissionsGranted: Bool {
-        return notificationPermission == .granted &&
-               accessibilityPermission == .granted &&
-               loginItemPermission == .granted
     }
     
     var hasDeniedPermissions: Bool {
