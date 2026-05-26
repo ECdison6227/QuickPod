@@ -5,6 +5,7 @@ class ScreenCleaner {
     private var window: NSWindow?
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private var activatedAt: Date?
     var onDeactivate: (() -> Void)?
 
     func activate() {
@@ -22,11 +23,13 @@ class ScreenCleaner {
         window?.level = .screenSaver
         window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window?.makeKeyAndOrderFront(nil)
+        activatedAt = Date()
 
         // 全局事件拦截（ESC / 空格 / 任意按键退出）
         globalMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.keyDown, .flagsChanged]
         ) { [weak self] event in
+            guard self?.shouldHandleDeactivateEvent == true else { return }
             self?.deactivate()
         }
 
@@ -34,9 +37,15 @@ class ScreenCleaner {
         localMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.keyDown, .leftMouseDown, .rightMouseDown, .flagsChanged]
         ) { [weak self] event in
+            guard self?.shouldHandleDeactivateEvent == true else { return event }
             self?.deactivate()
             return nil
         }
+    }
+
+    private var shouldHandleDeactivateEvent: Bool {
+        guard let activatedAt else { return true }
+        return Date().timeIntervalSince(activatedAt) > 0.25
     }
 
     func deactivate() {
@@ -53,6 +62,7 @@ class ScreenCleaner {
         // 使用 orderOut 而不是 close 避免卡顿
         window?.orderOut(nil)
         window = nil
+        activatedAt = nil
 
         if wasActive {
             onDeactivate?()

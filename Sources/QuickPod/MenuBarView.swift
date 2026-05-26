@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 struct MenuBarView: View {
     @ObservedObject var antiSleep: AntiSleepManager
@@ -76,6 +77,12 @@ struct MenuBarView: View {
                 title: "屏幕清洁",
                 subtitle: "点击进入清洁模式"
             ) {
+                screenCleanerState.onDeactivateExtra = { [weak appDelegate = NSApp.delegate as? AppDelegate] in
+                    // 返回侧边栏：重新弹出 popover
+                    if let button = appDelegate?.statusItem?.button {
+                        appDelegate?.showStatusPopover(relativeTo: button)
+                    }
+                }
                 screenCleanerState.activate()
             }
 
@@ -114,9 +121,31 @@ struct MenuBarView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 4)
                 }
+
+                ButtonRow(
+                    icon: "bell.badge",
+                    iconColor: .orange,
+                    title: "测试通知",
+                    subtitle: "验证通知系统"
+                ) {
+                    sendTestNotification()
+                }
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func sendTestNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "QuickPod 测试通知"
+        content.body = "通知系统正常工作！"
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "QuickPod.menuTestNotification",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.5, repeats: false)
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - File Creation

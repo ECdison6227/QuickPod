@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Darwin
 import SwiftUI
 import UserNotifications
@@ -10,12 +9,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     private var mainWindow: NSWindow!
     private var statusPopover: NSPopover!
+    private var onboardingWindow: NSWindow?
     private var reopenObserver: NSObjectProtocol?
     private var singleInstanceLockFD: Int32 = -1
-    private let globalHotkey = GlobalHotkey { _, _ in
-        RadialMenuController.shared.showQuickMenu()
-        (NSApp.delegate as? AppDelegate)?.statusPopover.performClose(nil)
-    }
+    private lazy var globalHotkey = GlobalHotkey(
+        onPress: { _, _ in
+            print("[QuickPod] Global hotkey pressed")
+            QuickSwitcherController.shared.hotkeyPressed()
+            (NSApp.delegate as? AppDelegate)?.statusPopover.performClose(nil)
+        },
+        onRelease: { _, _ in
+            print("[QuickPod] Global hotkey released")
+            QuickSwitcherController.shared.hotkeyReleased()
+        }
+    )
 
     // Managers
     let antiSleep = AntiSleepManager()
@@ -35,11 +42,87 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusBar()
         setupMainWindow()
         setupGlobalHotkey()
-        setupRadialMenu()
+        setupQuickSwitcher()
         requestNotificationPermission()
         breakReminder.prepareOnLaunch()
-        promptForAccessibilityIfNeeded()
-        showMainWindow()
+        
+        // 检查是否需要显示引导动画
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "QuickPod.hasCompletedOnboarding")
+        if !hasCompletedOnboarding {
+            showOnboardingWindow()
+        } else {
+            showMainWindow()
+        }
+
+        if ProcessInfo.processInfo.arguments.contains("--show-radial-on-launch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                QuickSwitcherController.shared.show()
+            }
+        }
+
+        if ProcessInfo.processInfo.arguments.contains("--verify-break-reminder") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self = self else { return }
+                self.breakReminder.start(withInterval: 15)
+                self.breakReminder.hasPendingReminder { exists in
+                    print("[QuickPod] Break reminder pending request exists: \(exists)")
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+    }
+    
+    private func showOnboardingWindow() {
+        struct OnboardingWrapper: View {
+            let completion: () -> Void
+            
+            var body: some View {
+                OnboardingAnimationView(isPresented: .constant(true))
+                    .onDisappear {
+                        completion()
+                    }
+            }
+        }
+        
+        let wrapperView = OnboardingWrapper { [weak self] in
+            self?.onboardingWindow?.orderOut(nil)
+            self?.onboardingWindow = nil
+            self?.showMainWindow()
+        }
+        
+        let hostingView = NSHostingView(rootView: wrapperView)
+        let size = NSSize(width: 440, height: 640)
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = NSView.AutoresizingMask([.width, .height])
+        
+        let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let windowRect = NSRect(
+            x: (screenFrame.width - size.width) / 2,
+            y: (screenFrame.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+        
+        let window = NSWindow(
+            contentRect: windowRect,
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.setContentSize(size)
+        window.contentView = hostingView
+        window.title = "QuickPod"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = true
+        window.center()
+        window.level = .floating
+        
+        onboardingWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Status Bar
@@ -48,18 +131,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
-               let icon = NSImage(contentsOfFile: iconPath) {
-                icon.size = NSSize(width: 18, height: 18)
-                button.image = icon
-            } else {
-                button.image = NSImage(
-                    systemSymbolName: "bolt.fill",
-                    accessibilityDescription: "QuickPod"
-                )
-            }
-            button.action = #selector(toggleStatusPopover)
+            // 统一使用闪电图标作为状态栏图标，根据防睡眠状态变化颜色
+            updateStatusBarIcon()
+            button.action = #selector(toggleMainWindow)
+            button.sendAction(on: [.leftMouseDown])
         }
+
+        // 右键菜单
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "设置", action: #selector(toggleMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "退出 QuickPod", action: #selector(quitApp), keyEquivalent: ""))
+        statusItem.menu = menu
 
         let popoverView = MenuBarView(
             antiSleep: antiSleep,
@@ -74,6 +157,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusPopover.animates = true
         statusPopover.contentSize = NSSize(width: 300, height: 390)
         statusPopover.contentViewController = NSHostingController(rootView: popoverView)
+
+        // 监听防睡眠状态变化，更新图标
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(updateStatusBarIcon),
+            name: AntiSleepManager.statusChangedNotification,
+            object: nil
+        )
+    }
+
+    @objc private func updateStatusBarIcon() {
+        guard let button = statusItem.button else { return }
+        
+        let imageName = antiSleep.isActive ? "bolt.fill" : "bolt.slash.fill"
+        
+        if let image = NSImage(systemSymbolName: imageName, accessibilityDescription: "QuickPod") {
+            image.isTemplate = true
+            image.size = NSSize(width: 18, height: 18)
+            
+            // 添加淡入淡出动画效果
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.2
+                button.animator().alphaValue = 0.0
+            }, completionHandler: {
+                button.image = image
+                button.imageScaling = .scaleProportionallyDown
+                
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.2
+                    button.animator().alphaValue = 1.0
+                }, completionHandler: nil)
+            })
+        }
+    }
+
+    @objc private func quitApp() {
+        NSApplication.shared.terminate(nil)
     }
 
     // MARK: - Main Window (Frosted Glass)
@@ -145,7 +265,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if statusPopover.isShown {
             statusPopover.performClose(nil)
         } else {
-            statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // 计算弹出位置，使箭头居中对齐到图标
+            let iconWidth: CGFloat = 18
+            let offsetX = (button.bounds.width - iconWidth) / 2 + iconWidth / 2
+            let popoverRect = NSRect(x: offsetX - 4, y: 0, width: 8, height: button.bounds.height)
+            statusPopover.show(relativeTo: popoverRect, of: button, preferredEdge: .minY)
+            statusPopover.contentViewController?.view.window?.makeKey()
+        }
+    }
+
+    func showStatusPopover(relativeTo button: NSStatusBarButton) {
+        if !statusPopover.isShown {
+            let iconWidth: CGFloat = 18
+            let offsetX = (button.bounds.width - iconWidth) / 2 + iconWidth / 2
+            let popoverRect = NSRect(x: offsetX - 4, y: 0, width: 8, height: button.bounds.height)
+            statusPopover.show(relativeTo: popoverRect, of: button, preferredEdge: .minY)
             statusPopover.contentViewController?.view.window?.makeKey()
         }
     }
@@ -189,20 +323,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         globalHotkey.reconfigure()
     }
 
-    // MARK: - Radial Menu (Fn+Option 长按)
+    // MARK: - Quick Switcher (Fn+Option 长按)
 
-    private func setupRadialMenu() {
-        RadialMenuController.shared.startListening()
+    private func setupQuickSwitcher() {
+        QuickSwitcherController.shared.startListening()
     }
 
     // MARK: - 通知权限
 
     private func requestNotificationPermission() {
-        breakReminder.requestPermission { granted in
-            if granted {
-                print("[QuickPod] 通知权限: 已授权")
-            } else {
-                print("[QuickPod] 通知权限: 被拒绝")
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                // 首次启动时主动申请
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    self?.showInitialNotificationPermissionAlert()
+                }
+            case .denied:
+                print("[QuickPod] 通知权限：已被拒绝")
+            case .authorized, .provisional, .ephemeral:
+                print("[QuickPod] 通知权限：已授权")
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func showInitialNotificationPermissionAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "启用通知提醒"
+        alert.informativeText = "QuickPod 可以发送通知来提醒您休息。是否现在开启通知权限？"
+        alert.addButton(withTitle: "允许通知")
+        alert.addButton(withTitle: "暂时不用")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            breakReminder.requestPermission { granted in
+                if granted {
+                    print("[QuickPod] 通知权限：已授权")
+                } else {
+                    print("[QuickPod] 通知权限：被拒绝")
+                }
             }
         }
     }
@@ -241,20 +402,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         singleInstanceLockFD = -1
     }
 
-    private func promptForAccessibilityIfNeeded() {
-        guard !isAccessibilityTrusted(prompt: false) else { return }
-
-        _ = isAccessibilityTrusted(prompt: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.presentAccessibilityPermissionAlert()
-        }
-    }
-
-    private func isAccessibilityTrusted(prompt: Bool) -> Bool {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
-    }
-
     private func openSystemSettings(urlString: String) {
         guard let url = URL(string: urlString) else { return }
         NSWorkspace.shared.open(url)
@@ -270,15 +417,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if alert.runModal() == .alertFirstButtonReturn {
             openHandler()
-        }
-    }
-
-    func presentAccessibilityPermissionAlert() {
-        showPermissionAlert(
-            title: "需要辅助功能权限",
-            message: "QuickPod 需要辅助功能权限来响应全局快捷键。请在“系统设置 > 隐私与安全性 > 辅助功能”中允许 QuickPod。"
-        ) { [weak self] in
-            self?.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         }
     }
 
@@ -298,6 +436,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         releaseSingleInstanceLock()
         globalHotkey.unregister()
-        RadialMenuController.shared.stopListening()
+        QuickSwitcherController.shared.stopListening()
     }
 }

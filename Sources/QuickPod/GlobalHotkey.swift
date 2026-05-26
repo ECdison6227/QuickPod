@@ -9,7 +9,8 @@ class GlobalHotkey {
 
     private var hotkeyRefs: [EventHotKeyRef?] = []
     private var registeredHandlerKey: String?
-    private let handler: Handler?
+    private let onPress: Handler?
+    private let onRelease: Handler?
 
     // MARK: - 快捷键配置持久化
 
@@ -106,7 +107,17 @@ class GlobalHotkey {
 
     private static var installed = false
     private static var eventHandlerRef: EventHandlerRef?
-    private static var hotkeyHandlers: [String: Handler] = [:]
+    private enum HotkeyEventKind {
+        case pressed
+        case released
+    }
+
+    private struct RegisteredHandlers {
+        let onPress: Handler?
+        let onRelease: Handler?
+    }
+
+    private static var hotkeyHandlers: [String: RegisteredHandlers] = [:]
     // 递增 ID 保证每个注册有唯一标识
     private static var nextID: UInt32 = 1
 
@@ -127,9 +138,16 @@ class GlobalHotkey {
         )
         if err == noErr {
             let key = handlerKey(for: hkID)
+            let eventKind = GetEventKind(event)
             DispatchQueue.main.async {
-                if let handler = GlobalHotkey.hotkeyHandlers[key] {
-                    handler(hkID.id, UInt32(hkID.signature))
+                guard let handlers = GlobalHotkey.hotkeyHandlers[key] else { return }
+                switch eventKind {
+                case UInt32(kEventHotKeyPressed):
+                    handlers.onPress?(hkID.id, UInt32(hkID.signature))
+                case UInt32(kEventHotKeyReleased):
+                    handlers.onRelease?(hkID.id, UInt32(hkID.signature))
+                default:
+                    break
                 }
             }
         }
@@ -140,16 +158,22 @@ class GlobalHotkey {
         guard !installed else { return }
         installed = true
 
-        var eventType = EventTypeSpec(
+        var eventTypes = [
+            EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: OSType(kEventHotKeyPressed)
-        )
+            ),
+            EventTypeSpec(
+                eventClass: OSType(kEventClassKeyboard),
+                eventKind: OSType(kEventHotKeyReleased)
+            )
+        ]
 
         let status = InstallEventHandler(
             GetEventDispatcherTarget(),
             carbonCallback,
-            1,
-            &eventType,
+            eventTypes.count,
+            &eventTypes,
             nil,
             &eventHandlerRef
         )
@@ -162,8 +186,9 @@ class GlobalHotkey {
 
     // MARK: - 实例方法
 
-    init(handler: @escaping Handler) {
-        self.handler = handler
+    init(onPress: @escaping Handler, onRelease: Handler? = nil) {
+        self.onPress = onPress
+        self.onRelease = onRelease
     }
 
     /// 注册当前配置的快捷键
@@ -181,9 +206,14 @@ class GlobalHotkey {
         let key = Self.handlerKey(for: hotkeyID)
         registeredHandlerKey = key
 
-        Self.hotkeyHandlers[key] = { [weak self] _, _ in
-            self?.handler?(kc, mods)
-        }
+        Self.hotkeyHandlers[key] = RegisteredHandlers(
+            onPress: { [weak self] _, _ in
+                self?.onPress?(kc, mods)
+            },
+            onRelease: { [weak self] _, _ in
+                self?.onRelease?(kc, mods)
+            }
+        )
 
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(kc, mods, hotkeyID, GetEventDispatcherTarget(), 0, &ref)

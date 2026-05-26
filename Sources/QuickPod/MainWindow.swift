@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // MARK: - 主窗口视图
 
@@ -7,16 +8,18 @@ struct MainWindowView: View {
     @ObservedObject var breakReminder: BreakReminder
     @StateObject private var loginItem = LoginItemManager()
     @StateObject private var screenCleanerState = ScreenCleanerState()
+    @StateObject private var permissionManager = PermissionManager()
 
     @State private var defaultFileName: String = FileCreator.defaultFileName
     @State private var showFileNameEditor = false
     @State private var fileStatusMessage: String?
     @State private var hasSeenIntro = UserDefaults.standard.bool(forKey: "QuickPod.hasSeenIntro")
     @State private var isRecordingShortcut = false
-
+    
     var body: some View {
         VStack(spacing: 0) {
             headerView
+            permissionStatusBanner
             ScrollView {
                 VStack(spacing: 12) {
                     if !hasSeenIntro {
@@ -26,6 +29,7 @@ struct MainWindowView: View {
                     fileSettingsSection
                     reminderSettingsSection
                     shortcutSection
+                    permissionSection
                     appSettingsSection
                 }
                 .padding(.horizontal, 16)
@@ -35,6 +39,38 @@ struct MainWindowView: View {
         .frame(width: 440)
         .frame(minHeight: 560)
         .background(LiquidGlassBackground())
+        .onAppear {
+            permissionManager.checkAllPermissions()
+        }
+    }
+
+    // MARK: - Permission Status Banner
+
+    private var permissionStatusBanner: some View {
+        if permissionManager.hasDeniedPermissions {
+            return AnyView(
+                HStack(spacing: 8) {
+                    Image(systemName: "alert.triangle")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 14))
+                    Text("部分权限未开启，某些功能可能无法正常工作")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("检查") {
+                        permissionManager.checkAllPermissions()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.1))
+            )
+        } else {
+            return AnyView(EmptyView())
+        }
     }
 
     // MARK: - Header
@@ -85,10 +121,10 @@ struct MainWindowView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.secondary)
             }
-            Text("QuickPod 会待在菜单栏里。点击状态栏图标打开快捷面板；打开设置窗口可以改默认文件名、休息提醒间隔、开机启动，并查看快捷键说明。圆形快捷菜单默认使用 Command + Option + Space 打开，也可以录制成你自己的快捷键。")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text("QuickPod 会待在菜单栏里。点击状态栏图标打开快捷面板；打开设置窗口可以改默认文件名、休息提醒间隔、开机启动，并查看快捷键说明。圆形快捷菜单会在按住快捷键时显示，松开后关闭。")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .liquidCard(cornerRadius: 16)
@@ -96,15 +132,39 @@ struct MainWindowView: View {
 
     private var coreControlsSection: some View {
         settingsSection("核心功能", subtitle: "常用开关也可以从状态栏快捷面板操作") {
-            MiniToggleRow(
-                title: "防睡眠",
-                subtitle: antiSleep.isActive ? "Mac 不会休眠" : "正常休眠",
-                isOn: antiSleep.isActive,
-                action: { antiSleep.toggle() }
-            )
-            thinDivider
-            MiniButtonRow(title: "屏幕清洁", subtitle: "全屏黑色清洁模式，按任意键或点击退出") {
-                screenCleanerState.activate()
+            VStack(spacing: 0) {
+                MiniToggleRow(
+                    title: "防睡眠",
+                    subtitle: antiSleep.isActive ? "剩余时间: \(antiSleep.getRemainingTimeString())" : "正常休眠",
+                    isOn: antiSleep.isActive,
+                    action: { antiSleep.toggle() }
+                )
+                
+                if antiSleep.isActive {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("会话时长")
+                            .font(.system(size: 12, weight: .medium))
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                            ForEach(AntiSleepManager.SessionDuration.allCases, id: \.self) { duration in
+                                Button(duration.displayName) {
+                                    antiSleep.activate(withDuration: duration)
+                                }
+                                .buttonStyle(LiquidPillButtonStyle(isSelected: antiSleep.sessionDuration == duration))
+                                .font(.system(size: 11, weight: .medium))
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                    .padding(12)
+                }
+                
+                thinDivider
+                MiniButtonRow(title: "屏幕清洁", subtitle: "全屏黑色清洁模式，按任意键或点击退出") {
+                    screenCleanerState.onDeactivateExtra = { [weak appDelegate = NSApp.delegate as? AppDelegate] in
+                        appDelegate?.showMainWindowAgain()
+                    }
+                    screenCleanerState.activate()
+                }
             }
         }
     }
@@ -176,14 +236,55 @@ struct MainWindowView: View {
                 }
             }
             .padding(12)
+            thinDivider
+            MiniButtonRow(title: "发送测试通知", subtitle: "立即发送一条通知，确认通知系统正常") {
+                sendTestNotification()
+            }
+        }
+    }
+
+    private func sendTestNotification() {
+        fileStatusMessage = "正在发送测试通知..."
+        
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .authorized, .provisional, .ephemeral:
+                    let content = UNMutableNotificationContent()
+                    content.title = "QuickPod 测试通知"
+                    content.body = "通知系统正常工作！"
+                    content.sound = .default
+                    let request = UNNotificationRequest(
+                        identifier: "QuickPod.testNotification",
+                        content: content,
+                        trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.5, repeats: false)
+                    )
+                    UNUserNotificationCenter.current().add(request)
+                    self.fileStatusMessage = "测试通知已发送，请检查通知中心"
+                case .notDetermined:
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                        DispatchQueue.main.async {
+                            if granted {
+                                self.sendTestNotification()
+                            } else {
+                                self.fileStatusMessage = "通知权限被拒绝，请在系统设置中开启"
+                            }
+                        }
+                    }
+                case .denied:
+                    self.fileStatusMessage = "通知权限已关闭，请在系统设置中开启"
+                @unknown default:
+                    self.fileStatusMessage = "无法发送测试通知"
+                }
+            }
         }
     }
 
     private var shortcutSection: some View {
-        settingsSection("快捷键", subtitle: "点击下方按钮录制自定义快捷键，录制时按键必须有 ⌘⌥⌃⇧ 之一") {
+        settingsSection("快捷键", subtitle: "录制用于呼出快捷菜单的快捷键，按住显示，松手关闭") {
             VStack(spacing: 0) {
                 HStack {
-                    Text("打开圆形快捷菜单")
+                    Text("打开快捷菜单")
                         .font(.system(size: 12, weight: .medium))
                     Spacer()
                     Button(action: {
@@ -225,6 +326,33 @@ struct MainWindowView: View {
             guard self.isRecordingShortcut else { return }
             self.isRecordingShortcut = false
             if let m = monitor { NSEvent.removeMonitor(m) }
+        }
+    }
+
+    private var permissionSection: some View {
+        settingsSection("权限管理", subtitle: "确保以下权限已正确配置") {
+            VStack(spacing: 0) {
+                PermissionRow(
+                    title: "通知权限",
+                    description: "用于休息提醒通知",
+                    status: permissionManager.notificationPermission,
+                    action: { permissionManager.openNotificationSettings() }
+                )
+                thinDivider
+                PermissionRow(
+                    title: "辅助功能",
+                    description: "用于快捷键全局监听",
+                    status: permissionManager.accessibilityPermission,
+                    action: { permissionManager.openAccessibilitySettings() }
+                )
+                thinDivider
+                PermissionRow(
+                    title: "开机启动",
+                    description: "登录时自动启动",
+                    status: permissionManager.loginItemPermission,
+                    action: { permissionManager.openLoginItemsSettings() }
+                )
+            }
         }
     }
 
@@ -352,6 +480,45 @@ struct InfoRow: View {
     }
 }
 
+struct PermissionRow: View {
+    let title: String
+    let description: String
+    let status: PermissionManager.PermissionStatus
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: status.iconName)
+                    .foregroundColor(Color(status.color))
+                    .font(.system(size: 16))
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+                    Text(description)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                HStack(spacing: 8) {
+                    Text(status.description)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(status.color))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(LiquidRowButtonStyle())
+    }
+}
+
 struct LiquidGlassBackground: View {
     var body: some View {
         ZStack {
@@ -429,20 +596,22 @@ class ScreenCleanerState: ObservableObject {
     private var cleaner = ScreenCleaner()
     @Published var isActive = false
 
+    /// Extra action to run after deactivation (e.g., restore a window).
+    /// Set to nil when cleaner is triggered from the radial menu (no restore needed).
+    var onDeactivateExtra: (() -> Void)?
+
     init() {
         cleaner.onDeactivate = { [weak self] in
             DispatchQueue.main.async {
                 self?.isActive = false
-                if let appDelegate = NSApp.delegate as? AppDelegate {
-                    appDelegate.showMainWindowAgain()
-                }
+                self?.onDeactivateExtra?()
             }
         }
     }
 
     func activate() {
         isActive = true
-        // 隐藏主窗口再启动清洁模式
+        // Hide main window before entering cleaner mode
         if let appDelegate = NSApp.delegate as? AppDelegate {
             appDelegate.hideMainWindow()
         }

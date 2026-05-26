@@ -60,6 +60,10 @@ class FileCreator {
     }
 
     func create(_ type: FileType, completion: @escaping (CreationResult) -> Void = { _ in }) {
+        create(type, customBaseName: nil, completion: completion)
+    }
+
+    func create(_ type: FileType, customBaseName: String?, completion: @escaping (CreationResult) -> Void = { _ in }) {
         guard let desktopURL = FileManager.default.urls(
             for: .desktopDirectory, in: .userDomainMask
         ).first else {
@@ -69,7 +73,7 @@ class FileCreator {
             return
         }
 
-        let baseName = Self.defaultFileName
+        let baseName = normalizedBaseName(customBaseName)
         let ext = (type.rawValue as NSString).pathExtension
         let fileName = ext.isEmpty ? baseName : "\(baseName).\(ext)"
         let fileURL = desktopURL.appendingPathComponent(fileName)
@@ -100,6 +104,15 @@ class FileCreator {
         DispatchQueue.main.async {
             completion(.success(uniqueURL))
         }
+    }
+
+    private func normalizedBaseName(_ customBaseName: String?) -> String {
+        let trimmed = customBaseName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty {
+            Self.defaultFileName = trimmed
+            return trimmed
+        }
+        return Self.defaultFileName
     }
 
     private func sendCreationNotification(for fileURL: URL) {
