@@ -49,13 +49,8 @@ class BreakReminder: NSObject, ObservableObject {
         if isActive {
             stop()
         } else {
-            ensurePermission { [weak self] granted in
-                guard granted else {
-                    (NSApp.delegate as? AppDelegate)?.presentNotificationPermissionAlert()
-                    return
-                }
-                self?.start()
-            }
+            // 直接启动，如果权限有问题会在发送通知时自动处理
+            start()
         }
     }
 

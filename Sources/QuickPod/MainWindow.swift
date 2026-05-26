@@ -47,28 +47,7 @@ struct MainWindowView: View {
     // MARK: - Permission Status Banner
 
     private var permissionStatusBanner: some View {
-        if permissionManager.accessibilityPermission == .denied {
-            return AnyView(
-                HStack(spacing: 8) {
-                    Image(systemName: "alert.triangle")
-                        .foregroundColor(.orange)
-                        .font(.system(size: 14))
-                    Text("辅助功能权限未开启 — 授权后请重启 QuickPod")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button("授权") {
-                        permissionManager.requestAccessibilityPermission()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.blue)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.orange.opacity(0.1))
-            )
-        } else if permissionManager.notificationPermission == .denied {
+        if permissionManager.notificationPermission == .denied {
             return AnyView(
                 HStack(spacing: 8) {
                     Image(systemName: "alert.triangle")
@@ -394,14 +373,18 @@ struct MainWindowView: View {
                 thinDivider
                 PermissionRow(
                     title: "辅助功能",
-                    description: permissionManager.accessibilityPermission == .denied
-                        ? "用于快捷键全局监听 - 授权后需重启 QuickPod"
-                        : "用于快捷键全局监听",
+                    description: "用于快捷键全局监听",
                     status: permissionManager.accessibilityPermission,
-                    action: { permissionManager.requestAccessibilityPermission() }
+                    action: { permissionManager.openAccessibilitySettings() }
                 )
                 thinDivider
-        }
+                PermissionRow(
+                    title: "开机启动",
+                    description: "登录时自动启动",
+                    status: permissionManager.loginItemPermission,
+                    action: { permissionManager.openLoginItemsSettings() }
+                )
+            }
         }
     }
 
@@ -413,6 +396,10 @@ struct MainWindowView: View {
                 isOn: loginItem.isEnabled,
                 action: { loginItem.toggle() }
             )
+            thinDivider
+            MiniButtonRow(title: "检查更新", subtitle: "检查 QuickPod 是否有新版本") {
+                UpdateChecker.shared.checkForUpdates(showAlert: true)
+            }
             thinDivider
             MiniButtonRow(title: "退出 QuickPod", subtitle: "关闭菜单栏常驻进程") {
                 NSApplication.shared.terminate(nil)

@@ -44,7 +44,8 @@ swiftc \
     "$SRC_DIR/BreakReminder.swift" \
     "$SRC_DIR/LoginItemManager.swift" \
     "$SRC_DIR/QuickSwitcher.swift" \
-    "$SRC_DIR/PermissionManager.swift"
+    "$SRC_DIR/PermissionManager.swift" \
+    "$SRC_DIR/UpdateChecker.swift"
 
 echo "  编译完成: $MACOS_DIR/$APP_NAME"
 
