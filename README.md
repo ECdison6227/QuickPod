@@ -2,6 +2,8 @@
 
 macOS 菜单栏效率工具集 - 防睡眠、休息提醒、屏幕清洁、快速切换器
 
+[English Version](README.en.md) | [架构文档](ARCHITECTURE.md)
+
 ## 功能特点
 
 ### 🔋 防睡眠
