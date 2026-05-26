@@ -67,12 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         updateStatusBarIcon()
-
-        let menu = NSMenu()
-        menu.addItem(withTitle: "设置", action: #selector(showMainWindow), keyEquivalent: ",")
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "退出", action: #selector(quitApp), keyEquivalent: "q")
-        statusItem.menu = menu
+        rebuildMenu()
 
         NotificationCenter.default.addObserver(
             self,
@@ -80,6 +75,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: AntiSleepManager.statusChangedNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(rebuildMenu),
+            name: AntiSleepManager.statusChangedNotification,
+            object: nil
+        )
+    }
+
+    @objc private func rebuildMenu() {
+        let menu = NSMenu()
+        let antiSleepItem = NSMenuItem(
+            title: antiSleep.isActive ? "✓ 防睡眠已开启" : "  防睡眠已关闭",
+            action: #selector(toggleAntiSleepFromMenu),
+            keyEquivalent: ""
+        )
+        antiSleepItem.image = antiSleep.isActive
+            ? NSImage(systemSymbolName: "moon.zzz.fill", accessibilityDescription: nil)
+            : NSImage(systemSymbolName: "moon", accessibilityDescription: nil)
+        menu.addItem(antiSleepItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "设置…", action: #selector(showMainWindow), keyEquivalent: ",")
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "退出", action: #selector(quitApp), keyEquivalent: "q")
+        statusItem.menu = menu
+    }
+
+    @objc private func toggleAntiSleepFromMenu() {
+        antiSleep.toggle()
     }
 
     @objc private func updateStatusBarIcon() {

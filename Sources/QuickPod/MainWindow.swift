@@ -352,23 +352,16 @@ struct MainWindowView: View {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard let combo = extractHotKeyFromEvent(event) else { return event }
 
-            // Visual flash feedback: show which key was pressed
-            if let chars = event.charactersIgnoringModifiers?.uppercased() {
-                self.flashedKey = chars
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    self.flashedKey = nil
-                }
-            }
-
             GlobalHotkey.keyCode = combo.keyCode
             GlobalHotkey.modifiers = combo.modifiers
             self.isRecordingShortcut = false
             if let m = monitor { NSEvent.removeMonitor(m) }
             if let m = keyMonitor { NSEvent.removeMonitor(m) }
             (NSApp.delegate as? AppDelegate)?.reconfigureHotkey()
+            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
             return nil
         }
-        // Also show modifier changes in real-time
+        // Show modifier changes in real-time
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let parts: [String] = [

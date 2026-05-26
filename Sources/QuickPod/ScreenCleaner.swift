@@ -45,17 +45,26 @@ class ScreenCleaner {
         guard let screen = NSScreen.main else { return }
 
         let rect = screen.frame
-        window = NSWindow(
+        let w = NSWindow(
             contentRect: rect,
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
-        window?.isReleasedWhenClosed = false
-        window?.backgroundColor = .black
-        window?.level = .screenSaver
-        window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window?.makeKeyAndOrderFront(nil)
+        w.isReleasedWhenClosed = false
+        w.backgroundColor = .clear
+        w.isOpaque = false
+        w.level = .screenSaver
+        w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        let hostingView = NSHostingView(rootView: CleanScreenView(onDeactivate: { [weak self] in
+            self?.deactivate()
+        }))
+        hostingView.frame = rect
+        hostingView.autoresizingMask = [.width, .height]
+        w.contentView = hostingView
+        w.makeKeyAndOrderFront(nil)
+        window = w
         activatedAt = Date()
 
         // 全局事件拦截
@@ -155,5 +164,25 @@ private struct CountdownView: View {
                 onFinished()
             }
         }
+    }
+}
+
+// MARK: - Clean Screen View (black + exit hint)
+
+private struct CleanScreenView: View {
+    let onDeactivate: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.edgesIgnoringSafeArea(.all)
+            VStack {
+                Spacer()
+                Text("按任意键或点击退出清洁模式")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white.opacity(0.25))
+                    .padding(.bottom, 48)
+            }
+        }
+        .onTapGesture { onDeactivate() }
     }
 }
