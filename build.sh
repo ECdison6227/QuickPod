@@ -37,7 +37,6 @@ swiftc \
     "$SRC_DIR/main.swift" \
     "$SRC_DIR/AppDelegate.swift" \
     "$SRC_DIR/MainWindow.swift" \
-    "$SRC_DIR/MenuBarView.swift" \
     "$SRC_DIR/GlobalHotkey.swift" \
     "$SRC_DIR/AntiSleepManager.swift" \
     "$SRC_DIR/ScreenCleaner.swift" \

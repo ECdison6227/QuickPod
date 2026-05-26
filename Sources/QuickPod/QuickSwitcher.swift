@@ -234,16 +234,8 @@ final class QuickSwitcherController: ObservableObject {
                 subtitle: (NSApp.delegate as? AppDelegate)?.antiSleep.isActive == true ? "已开启" : "防止休眠",
                 icon: "moon.zzz.fill",
                 kind: .action
-            ) { [weak self] in
-                let delegate = NSApp.delegate as? AppDelegate
-                let wasActive = delegate?.antiSleep.isActive ?? false
-                delegate?.antiSleep.toggle()
-                let nowActive = delegate?.antiSleep.isActive ?? false
-                if wasActive != nowActive {
-                    let title = nowActive ? "防睡眠已开启" : "防睡眠已关闭"
-                    let body = nowActive ? "Mac 将保持唤醒状态" : "Mac 将正常休眠"
-                    self?.sendTransientNotification(title: title, body: body)
-                }
+            ) {
+                (NSApp.delegate as? AppDelegate)?.antiSleep.toggle()
             },
             QuickSwitcherItem(
                 title: "屏幕清洁",

@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UserNotifications
 
 class AntiSleepManager: ObservableObject {
     static let statusChangedNotification = Notification.Name("com.quickpod.antisleep.statusChanged")
@@ -75,6 +76,7 @@ class AntiSleepManager: ObservableObject {
                 startSessionTimer()
             }
             
+            sendNotification(title: "防睡眠已开启", body: duration == .indefinite ? "Mac 将保持唤醒" : "\(duration.displayName) 后自动关闭")
             notifyStatusChanged()
         } catch {
             print("[QuickPod] 防睡眠启动失败: \(error.localizedDescription)")
@@ -105,6 +107,7 @@ class AntiSleepManager: ObservableObject {
         startTime = nil
         remainingSeconds = 0
         isActive = false
+        sendNotification(title: "防睡眠已关闭", body: "Mac 将正常休眠")
         notifyStatusChanged()
     }
     
@@ -128,6 +131,20 @@ class AntiSleepManager: ObservableObject {
         }
     }
     
+    private func sendNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        let request = UNNotificationRequest(
+            identifier: "QuickPod.antiSleep.\(UUID().uuidString)",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
     private func notifyStatusChanged() {
         DispatchQueue.main.async {
             NotificationCenter.default.post(

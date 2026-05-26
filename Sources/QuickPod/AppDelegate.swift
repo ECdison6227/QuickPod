@@ -8,14 +8,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     var statusItem: NSStatusItem!
     private var mainWindow: NSWindow!
-    private var statusPopover: NSPopover!
     private var reopenObserver: NSObjectProtocol?
     private var singleInstanceLockFD: Int32 = -1
     private lazy var globalHotkey = GlobalHotkey(
         onPress: { _, _ in
             print("[QuickPod] Global hotkey pressed")
             QuickSwitcherController.shared.hotkeyPressed()
-            (NSApp.delegate as? AppDelegate)?.statusPopover.performClose(nil)
         },
         onRelease: { _, _ in
             print("[QuickPod] Global hotkey released")
@@ -68,25 +66,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        if let button = statusItem.button {
-            updateStatusBarIcon()
-            button.action = #selector(toggleStatusPopover)
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
+        updateStatusBarIcon()
 
-        let popoverView = MenuBarView(
-            antiSleep: antiSleep,
-            breakReminder: breakReminder,
-            openSettings: { [weak self] in
-                self?.statusPopover.performClose(nil)
-                self?.showMainWindow()
-            }
-        )
-        statusPopover = NSPopover()
-        statusPopover.behavior = .transient
-        statusPopover.animates = true
-        statusPopover.contentSize = NSSize(width: 300, height: 390)
-        statusPopover.contentViewController = NSHostingController(rootView: popoverView)
+        let menu = NSMenu()
+        menu.addItem(withTitle: "设置", action: #selector(showMainWindow), keyEquivalent: ",")
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "退出", action: #selector(quitApp), keyEquivalent: "q")
+        statusItem.menu = menu
 
         NotificationCenter.default.addObserver(
             self,
@@ -180,31 +166,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.contentView?.layer?.masksToBounds = true
     }
 
-    private func showMainWindow() {
+    @objc private func showMainWindow() {
         guard mainWindow != nil else {
             print("[QuickPod] Main window was not created successfully")
             return
         }
         mainWindow.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
-    }
-
-    @objc private func toggleStatusPopover() {
-        guard let button = statusItem.button else { return }
-        if statusPopover.isShown {
-            statusPopover.performClose(nil)
-        } else {
-            statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            statusPopover.contentViewController?.view.window?.makeKey()
-        }
-    }
-
-    func showStatusPopover() {
-        guard let button = statusItem.button else { return }
-        if !statusPopover.isShown {
-            statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            statusPopover.contentViewController?.view.window?.makeKey()
-        }
     }
 
     @objc private func toggleMainWindow() {

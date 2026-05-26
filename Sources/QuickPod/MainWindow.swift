@@ -47,18 +47,39 @@ struct MainWindowView: View {
     // MARK: - Permission Status Banner
 
     private var permissionStatusBanner: some View {
-        if permissionManager.hasDeniedPermissions {
+        if permissionManager.accessibilityPermission == .denied {
             return AnyView(
                 HStack(spacing: 8) {
                     Image(systemName: "alert.triangle")
                         .foregroundColor(.orange)
                         .font(.system(size: 14))
-                    Text("部分权限未开启，某些功能可能无法正常工作")
+                    Text("辅助功能权限未开启 — 授权后请重启 QuickPod")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Button("检查") {
-                        permissionManager.checkAllPermissions()
+                    Button("授权") {
+                        permissionManager.requestAccessibilityPermission()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.1))
+            )
+        } else if permissionManager.notificationPermission == .denied {
+            return AnyView(
+                HStack(spacing: 8) {
+                    Image(systemName: "alert.triangle")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 14))
+                    Text("通知权限未开启")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("设置") {
+                        permissionManager.openNotificationSettings()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .medium))
@@ -280,6 +301,8 @@ struct MainWindowView: View {
         }
     }
 
+    @State private var flashedKey: String?
+
     private var shortcutSection: some View {
         settingsSection("快捷键", subtitle: "录制用于呼出快捷菜单的快捷键，按住显示，松手关闭") {
             VStack(spacing: 0) {
@@ -291,17 +314,29 @@ struct MainWindowView: View {
                         isRecordingShortcut = true
                         installShortcutRecorder()
                     }) {
-                        Text(isRecordingShortcut ? "按下新快捷键..." : GlobalHotkey.displayString)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(isRecordingShortcut ? .orange : .primary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(isRecordingShortcut
-                                        ? Color.orange.opacity(0.15)
-                                        : Color.primary.opacity(0.06))
-                            )
+                        HStack(spacing: 6) {
+                            if isRecordingShortcut {
+                                Circle()
+                                    .fill(.orange)
+                                    .frame(width: 6, height: 6)
+                                    .opacity(0.6)
+                            }
+                            Text(isRecordingShortcut ? "按下新快捷键..." : GlobalHotkey.displayString)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(isRecordingShortcut ? .orange : .primary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isRecordingShortcut
+                                    ? Color.orange.opacity(0.15)
+                                    : Color.primary.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(isRecordingShortcut ? Color.orange.opacity(0.5) : .clear, lineWidth: 1)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -313,19 +348,44 @@ struct MainWindowView: View {
     private func installShortcutRecorder() {
         guard NSApp.keyWindow ?? NSApp.windows.first != nil else { return }
         var monitor: Any?
+        var keyMonitor: Any?
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard let combo = extractHotKeyFromEvent(event) else { return event }
+
+            // Visual flash feedback: show which key was pressed
+            if let chars = event.charactersIgnoringModifiers?.uppercased() {
+                self.flashedKey = chars
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    self.flashedKey = nil
+                }
+            }
+
             GlobalHotkey.keyCode = combo.keyCode
             GlobalHotkey.modifiers = combo.modifiers
             self.isRecordingShortcut = false
             if let m = monitor { NSEvent.removeMonitor(m) }
+            if let m = keyMonitor { NSEvent.removeMonitor(m) }
             (NSApp.delegate as? AppDelegate)?.reconfigureHotkey()
             return nil
+        }
+        // Also show modifier changes in real-time
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let parts: [String] = [
+                (mods.contains(.command) ? "⌘" : ""),
+                (mods.contains(.option) ? "⌥" : ""),
+                (mods.contains(.control) ? "⌃" : ""),
+                (mods.contains(.shift) ? "⇧" : "")
+            ].filter { !$0.isEmpty }
+            self.flashedKey = parts.isEmpty ? nil : parts.joined()
+            return event
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
             guard self.isRecordingShortcut else { return }
             self.isRecordingShortcut = false
+            self.flashedKey = nil
             if let m = monitor { NSEvent.removeMonitor(m) }
+            if let m = keyMonitor { NSEvent.removeMonitor(m) }
         }
     }
 
@@ -341,9 +401,11 @@ struct MainWindowView: View {
                 thinDivider
                 PermissionRow(
                     title: "辅助功能",
-                    description: "用于快捷键全局监听",
+                    description: permissionManager.accessibilityPermission == .denied
+                        ? "用于快捷键全局监听 - 授权后需重启 QuickPod"
+                        : "用于快捷键全局监听",
                     status: permissionManager.accessibilityPermission,
-                    action: { permissionManager.openAccessibilitySettings() }
+                    action: { permissionManager.requestAccessibilityPermission() }
                 )
                 thinDivider
         }
@@ -606,11 +668,10 @@ class ScreenCleanerState: ObservableObject {
 
     func activate() {
         isActive = true
-        // Hide main window before entering cleaner mode
         if let appDelegate = NSApp.delegate as? AppDelegate {
             appDelegate.hideMainWindow()
         }
-        cleaner.activate()
+        cleaner.activateWithCountdown()
     }
 
     func deactivate() {
