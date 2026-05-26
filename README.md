@@ -62,7 +62,7 @@ macOS 菜单栏效率工具集 - 专为 AI Coding Agent 长时间运行设计
 ## 安装
 
 ### 方法1：下载 DMG（推荐）
-1. 从 [Releases](https://github.com/edison/QuickPod/releases) 下载最新版本
+1. 从 [Releases](https://github.com/ECdison6227/QuickPod/releases) 下载最新版本
 2. 双击 `.dmg` 文件
 3. 将 `QuickPod.app` 拖到 Applications 文件夹
 

@@ -12,8 +12,8 @@ class UpdateChecker: ObservableObject {
     @Published var checkError: String?
     
     // GitHub 配置
-    private let repoOwner = "edison"  // TODO: 修改为你的 GitHub 用户名
-    private let repoName = "QuickPod"  // TODO: 修改为你的仓库名
+    private let repoOwner = "ECdison6227"
+    private let repoName = "QuickPod"
     
     private var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
