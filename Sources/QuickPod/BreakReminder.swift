@@ -21,6 +21,11 @@ class BreakReminder: NSObject, ObservableObject {
     @Published var isActive = UserDefaults.standard.bool(forKey: Keys.isActive) {
         didSet {
             UserDefaults.standard.set(isActive, forKey: Keys.isActive)
+            if isActive {
+                scheduleNotifications()
+            } else {
+                stop()
+            }
         }
     }
     @Published var intervalMinutes: Int = UserDefaults.standard.integer(forKey: "QuickPod.breakIntervalMinutes") == 0
@@ -28,11 +33,17 @@ class BreakReminder: NSObject, ObservableObject {
         : UserDefaults.standard.integer(forKey: "QuickPod.breakIntervalMinutes") {
         didSet {
             UserDefaults.standard.set(intervalMinutes, forKey: Keys.interval)
+            if isActive {
+                scheduleNotifications()
+            }
         }
     }
     @Published var reminderStyle: ReminderStyle {
         didSet {
             UserDefaults.standard.set(reminderStyle.rawValue, forKey: Keys.reminderStyle)
+            if isActive {
+                scheduleNotifications()
+            }
         }
     }
 
@@ -43,15 +54,11 @@ class BreakReminder: NSObject, ObservableObject {
         let rawValue = UserDefaults.standard.integer(forKey: Keys.reminderStyle)
         reminderStyle = ReminderStyle(rawValue: rawValue) ?? .both
         super.init()
+        center.delegate = self
     }
 
     func toggle() {
-        if isActive {
-            stop()
-        } else {
-            // 直接启动，如果权限有问题会在发送通知时自动处理
-            start()
-        }
+        isActive.toggle()
     }
 
     func restart() {
@@ -61,61 +68,61 @@ class BreakReminder: NSObject, ObservableObject {
 
     func start(withInterval interval: Int) {
         intervalMinutes = interval
-        start()
+        isActive = true
     }
 
     func prepareOnLaunch() {
         guard isActive else { return }
-        ensurePermission { [weak self] granted in
-            guard let self = self else { return }
-            if granted {
-                self.scheduleNotifications()
+        // 直接启动通知调度，权限检查放在发送通知时处理
+        scheduleNotifications()
+    }
+
+    func sendTestNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "测试通知"
+        content.body = "休息提醒测试 - QuickPod"
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+
+        let request = UNNotificationRequest(
+            identifier: "QuickPod.test.notification",
+            content: content,
+            trigger: nil
+        )
+
+        center.add(request) { error in
+            if let error = error {
+                print("[QuickPod] 测试通知发送失败: \(error.localizedDescription)")
             } else {
-                self.stop()
+                print("[QuickPod] 测试通知已发送")
             }
         }
     }
 
     func requestPermission(completion: ((Bool) -> Void)? = nil) {
-        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                print("[QuickPod] 请求通知权限失败: \(error.localizedDescription)")
+            }
             DispatchQueue.main.async {
                 completion?(granted)
             }
         }
     }
 
-    private func start() {
-        isActive = true
-        scheduleNotifications()
-    }
-
-    private func ensurePermission(completion: @escaping (Bool) -> Void) {
-        center.getNotificationSettings { [weak self] settings in
-            switch settings.authorizationStatus {
-            case .authorized, .provisional, .ephemeral:
-                DispatchQueue.main.async { completion(true) }
-            case .notDetermined:
-                self?.requestPermission(completion: completion)
-            case .denied:
-                DispatchQueue.main.async { completion(false) }
-            @unknown default:
-                DispatchQueue.main.async { completion(false) }
-            }
-        }
-    }
-
     private func scheduleNotifications() {
         center.removePendingNotificationRequests(withIdentifiers: [notificationIdentifier])
+        reminderTimer?.invalidate()
+        reminderTimer = nil
         
-        // 注册通知动作处理
-        center.delegate = self
-        
+        print("[QuickPod] 调度休息提醒: 每 \(intervalMinutes) 分钟")
+
         // 根据提醒方式选择不同策略
         if reminderStyle == .systemNotification || reminderStyle == .both {
             scheduleSystemNotification()
         }
         
-        // 如果是弹窗提醒或两者都用，使用定时器替代系统通知
+        // 如果是弹窗提醒或两者都用，使用定时器
         if reminderStyle == .alertWindow || reminderStyle == .both {
             scheduleAlertReminder()
         }
@@ -140,8 +147,19 @@ class BreakReminder: NSObject, ObservableObject {
         center.add(request) { error in
             if let error = error {
                 print("[QuickPod] 休息提醒注册失败: \(error.localizedDescription)")
+                // 如果通知权限有问题，尝试请求权限
+                self.requestPermission { granted in
+                    if granted {
+                        // 权限已授予，重新调度
+                        DispatchQueue.main.async {
+                            if self.isActive {
+                                self.scheduleNotifications()
+                            }
+                        }
+                    }
+                }
             } else {
-                print("[QuickPod] 休息提醒已启用: every \(self.intervalMinutes) minutes")
+                print("[QuickPod] 休息提醒已启用 (系统通知): every \(self.intervalMinutes) minutes")
             }
         }
     }
@@ -156,6 +174,7 @@ class BreakReminder: NSObject, ObservableObject {
                 self?.showBreakReminderAlert()
             }
         }
+        print("[QuickPod] 休息提醒已启用 (弹窗): every \(intervalMinutes) minutes")
     }
     
     private func showBreakReminderAlert() {
@@ -237,6 +256,7 @@ class BreakReminder: NSObject, ObservableObject {
         postponeWorkItem?.cancel()
         postponeWorkItem = nil
         isActive = false
+        print("[QuickPod] 休息提醒已停止")
     }
 
     func hasPendingReminder(completion: @escaping (Bool) -> Void) {

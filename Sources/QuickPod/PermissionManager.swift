@@ -39,28 +39,63 @@ class PermissionManager: ObservableObject {
     }
     
     func checkAccessibilityPermission() {
-        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString: false]
-        let isTrusted = AXIsProcessTrustedWithOptions(options)
-        DispatchQueue.main.async { [weak self] in
-            self?.accessibilityPermission = isTrusted ? .granted : .notDetermined
+        DispatchQueue.global().async { [weak self] in
+            // 使用 AXIsProcessTrustedWithOptions 检测辅助功能权限
+            let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString: false]
+            let isTrusted = AXIsProcessTrustedWithOptions(options)
+            
+            DispatchQueue.main.async {
+                if isTrusted {
+                    self?.accessibilityPermission = .granted
+                } else {
+                    // 使用 AppleScript 检查更准确的权限状态
+                    let script = """
+                    tell application "System Events"
+                        set isEnabled to UI elements enabled
+                    end tell
+                    return isEnabled
+                    """
+                    
+                    var error: NSDictionary?
+                    let scriptObject = NSAppleScript(source: script)
+                    let result = scriptObject?.executeAndReturnError(&error)
+                    
+                    if error != nil {
+                        // AppleScript 失败，使用默认判断
+                        self?.accessibilityPermission = .notDetermined
+                    } else {
+                        if result?.booleanValue ?? false {
+                            // 用户已授权系统事件，但可能还没授权本应用
+                            // 直接使用 AXIsProcessTrusted 的结果
+                            self?.accessibilityPermission = isTrusted ? .granted : .notDetermined
+                        } else {
+                            self?.accessibilityPermission = .notDetermined
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func requestAccessibilityPermission() {
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString: true]
+        _ = AXIsProcessTrustedWithOptions(options)
+        // 延迟检查权限状态
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.checkAccessibilityPermission()
         }
     }
     
     func checkLoginItemPermission() {
         if #available(macOS 13.0, *) {
-            if SMAppService.mainApp.status == .enabled {
-                DispatchQueue.main.async { [weak self] in
-                    self?.loginItemPermission = .granted
-                }
-            } else {
-                DispatchQueue.main.async { [weak self] in
-                    self?.loginItemPermission = .notDetermined
+            DispatchQueue.global().async { [weak self] in
+                let status = SMAppService.mainApp.status
+                DispatchQueue.main.async {
+                    self?.loginItemPermission = status == .enabled ? .granted : .notDetermined
                 }
             }
         } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.loginItemPermission = .unknown
-            }
+            loginItemPermission = .unknown
         }
     }
     
@@ -77,9 +112,12 @@ class PermissionManager: ObservableObject {
     }
     
     func openLoginItemsSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.users") {
+        if #available(macOS 13.0, *) {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.users") {
             NSWorkspace.shared.open(url)
         }
     }

@@ -48,16 +48,10 @@ macOS 菜单栏效率工具集 - 专为 AI Coding Agent 长时间运行设计
 ## 📷 应用截图
 
 ### 主设置窗口
-![Main Settings Window](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/main-window.png)
-
-### 状态栏快捷面板
-![Status Bar Panel](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/status-bar-panel.png)
+![QuickPod 设置窗口](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/main-window.png)
 
 ### 快速切换器
-![Quick Switcher](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/quick-switcher.png)
-
-### 休息提醒弹窗
-![Break Reminder Alert](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/break-reminder.png)
+![QuickPod 快速切换器](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/quick-switcher.png)
 
 ## 安装
 
