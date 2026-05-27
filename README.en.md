@@ -35,9 +35,11 @@ QuickPod is a lightweight macOS menu bar utility built for long-running coding s
 
 ## Screenshots
 
-![Main window](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/main-window.png)
-![Quick switcher](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/quick-switcher.png)
-![Break reminder popup](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/break-reminder.png)
+<img src="https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/main-window.png" alt="Main window" width="380" />
+
+<img src="https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/quick-switcher.png" alt="Quick switcher" width="380" />
+
+<img src="https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/break-reminder.png" alt="Break reminder popup" width="380" />
 
 ## Install
 
