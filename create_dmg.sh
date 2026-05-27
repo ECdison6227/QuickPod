@@ -5,7 +5,8 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_NAME="QuickPod"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
-DMG_NAME="$APP_NAME-1.0.dmg"
+APP_VERSION=$(defaults read "$APP_BUNDLE/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo "1.0")
+DMG_NAME="$APP_NAME-$APP_VERSION.dmg"
 DMG_PATH="$BUILD_DIR/$DMG_NAME"
 DMG_TEMP="$BUILD_DIR/$APP_NAME-temp.dmg"
 

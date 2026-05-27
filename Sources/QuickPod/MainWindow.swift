@@ -6,15 +6,20 @@ import UserNotifications
 struct MainWindowView: View {
     @ObservedObject var antiSleep: AntiSleepManager
     @ObservedObject var breakReminder: BreakReminder
+    @ObservedObject private var updateChecker = UpdateChecker.shared
     @StateObject private var loginItem = LoginItemManager()
     @ObservedObject private var screenCleanerState = ScreenCleanerState.shared
     @StateObject private var permissionManager = PermissionManager()
 
     @State private var defaultFileName: String = FileCreator.defaultFileName
+    @State private var customFileExtension: String = FileCreator.customFileExtension
+    @State private var customReminderMinutes: String = ""
     @State private var showFileNameEditor = false
     @State private var fileStatusMessage: String?
+    @State private var reminderStatusMessage: String?
     @State private var hasSeenIntro = UserDefaults.standard.bool(forKey: "QuickPod.hasSeenIntro")
     @State private var isRecordingShortcut = false
+    @AppStorage(AppPreferences.languageKey) private var appLanguageRawValue = AppLanguage.system.rawValue
     
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +45,12 @@ struct MainWindowView: View {
         .frame(minHeight: 560)
         .background(LiquidGlassBackground())
         .onAppear {
+            if customReminderMinutes.isEmpty {
+                customReminderMinutes = "\(breakReminder.intervalMinutes)"
+            }
+            permissionManager.checkAllPermissions()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissionManager.checkAllPermissions()
         }
     }
@@ -53,11 +64,11 @@ struct MainWindowView: View {
                     Image(systemName: "alert.triangle")
                         .foregroundColor(.orange)
                         .font(.system(size: 14))
-                    Text("通知权限未开启")
+                    Text(QuickPodText.text(zh: "通知权限未开启", en: "Notifications are disabled"))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Button("设置") {
+                    Button(QuickPodText.text(zh: "设置", en: "Settings")) {
                         permissionManager.openNotificationSettings()
                     }
                     .buttonStyle(.plain)
@@ -67,6 +78,30 @@ struct MainWindowView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(Color.orange.opacity(0.1))
+            )
+        } else if permissionManager.notificationPermission == .notDetermined {
+            return AnyView(
+                HStack(spacing: 8) {
+                    Image(systemName: "bell.badge")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 14))
+                    Text(QuickPodText.text(
+                        zh: "系统还没有为当前构建登记通知权限。点一次“发送测试通知”或去系统设置里重新允许，可让这次 build 重新注册。",
+                        en: "macOS has not recorded notification permission for this build yet. Sending a test notification or re-enabling it in System Settings should register this build."
+                    ))
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button(QuickPodText.text(zh: "打开设置", en: "Open settings")) {
+                        permissionManager.openNotificationSettings()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.08))
             )
         } else {
             return AnyView(EmptyView())
@@ -81,10 +116,10 @@ struct MainWindowView: View {
                 .resizable()
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 1) {
-                Text("QuickPod 设置")
+                Text(QuickPodText.text(zh: "QuickPod 设置", en: "QuickPod Settings"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.primary)
-                Text("状态栏快捷操作、权限、提醒和文件模板")
+                Text(QuickPodText.text(zh: "状态栏快捷操作、权限、提醒和文件模板", en: "Menu bar actions, permissions, reminders, and file templates"))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -110,10 +145,10 @@ struct MainWindowView: View {
     private var firstLaunchCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("第一次使用", systemImage: "sparkles")
+                Label(QuickPodText.text(zh: "第一次使用", en: "First launch"), systemImage: "sparkles")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Button("知道了") {
+                Button(QuickPodText.text(zh: "知道了", en: "Got it")) {
                     hasSeenIntro = true
                     UserDefaults.standard.set(true, forKey: "QuickPod.hasSeenIntro")
                 }
@@ -121,7 +156,10 @@ struct MainWindowView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.secondary)
             }
-                Text("QuickPod 会待在菜单栏里。点击状态栏图标打开快捷面板；打开设置窗口可以改默认文件名、休息提醒间隔、开机启动，并查看快捷键说明。圆形快捷菜单会在按住快捷键时显示，松开后关闭。")
+                Text(QuickPodText.text(
+                    zh: "QuickPod 会待在菜单栏里。点击状态栏图标打开快捷面板；打开设置窗口可以改默认文件名、休息提醒间隔、开机启动，并查看快捷键说明。圆形快捷菜单会在按住快捷键时显示，松开后关闭。",
+                    en: "QuickPod lives in the menu bar. Use the status item for quick actions, and open Settings to change the default file name, break interval, launch-at-login, and shortcuts. The radial switcher appears while you hold the hotkey and closes when you release it."
+                ))
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -131,18 +169,20 @@ struct MainWindowView: View {
     }
 
     private var coreControlsSection: some View {
-        settingsSection("核心功能", subtitle: "常用开关也可以从状态栏快捷面板操作") {
+        settingsSection(QuickPodText.text(zh: "核心功能", en: "Core features"), subtitle: QuickPodText.text(zh: "常用开关也可以从状态栏快捷面板操作", en: "These controls are also available from the quick panel")) {
             VStack(spacing: 0) {
                 MiniToggleRow(
-                    title: "防睡眠",
-                    subtitle: antiSleep.isActive ? "剩余时间: \(antiSleep.getRemainingTimeString())" : "正常休眠",
+                    title: QuickPodText.text(zh: "防睡眠", en: "Anti-sleep"),
+                    subtitle: antiSleep.isActive
+                        ? QuickPodText.text(zh: "剩余时间: \(antiSleep.getRemainingTimeString())", en: "Time left: \(antiSleep.getRemainingTimeString())")
+                        : QuickPodText.text(zh: "正常休眠", en: "Normal sleep behavior"),
                     isOn: antiSleep.isActive,
                     action: { antiSleep.toggle() }
                 )
                 
                 if antiSleep.isActive {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("会话时长")
+                        Text(QuickPodText.text(zh: "会话时长", en: "Session duration"))
                             .font(.system(size: 12, weight: .medium))
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                             ForEach(AntiSleepManager.SessionDuration.allCases, id: \.self) { duration in
@@ -159,7 +199,7 @@ struct MainWindowView: View {
                 }
                 
                 thinDivider
-                MiniButtonRow(title: "屏幕清洁", subtitle: "全屏黑色清洁模式，按任意键或点击退出") {
+                MiniButtonRow(title: QuickPodText.text(zh: "屏幕清洁", en: "Screen cleaner"), subtitle: QuickPodText.text(zh: "全屏黑色清洁模式，按任意键或点击退出", en: "Full-screen black cleaning mode. Press any key or click to exit")) {
                     screenCleanerState.onDeactivateExtra = { [weak appDelegate = NSApp.delegate as? AppDelegate] in
                         appDelegate?.showMainWindowAgain()
                     }
@@ -170,9 +210,9 @@ struct MainWindowView: View {
     }
 
     private var fileSettingsSection: some View {
-        settingsSection("新建文件到桌面", subtitle: "先设置默认文件名，再点击类型按钮创建文件") {
+        settingsSection(QuickPodText.text(zh: "新建文件到桌面", en: "Create files on Desktop"), subtitle: QuickPodText.text(zh: "先设置默认文件名，再点击类型按钮创建文件", en: "Set the default file name, then choose a file type")) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField("默认文件名", text: $defaultFileName)
+                TextField(QuickPodText.text(zh: "默认文件名", en: "Default file name"), text: $defaultFileName)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
                     .onChange(of: defaultFileName) { _, newValue in
@@ -182,12 +222,12 @@ struct MainWindowView: View {
                         }
                     }
                 HStack(spacing: 8) {
-                    ForEach(FileCreator.FileType.allCases, id: \.self) { type in
+                    ForEach(FileCreator.availableFileTypes, id: \.self) { type in
                         Button(type.shortName) {
                             FileCreator().create(type) { result in
                                 switch result {
                                 case .success(let url):
-                                    fileStatusMessage = "\(url.lastPathComponent) 已创建到桌面"
+                                    fileStatusMessage = QuickPodText.text(zh: "\(url.lastPathComponent) 已创建到桌面", en: "\(url.lastPathComponent) was created on the Desktop")
                                 case .failure(let error):
                                     fileStatusMessage = error.localizedDescription
                                 }
@@ -198,6 +238,40 @@ struct MainWindowView: View {
                         .buttonStyle(LiquidPillButtonStyle(isSelected: false))
                     }
                 }
+                HStack(spacing: 10) {
+                    TextField(QuickPodText.text(zh: "自定义后缀", en: "Custom extension"), text: $customFileExtension)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12))
+                        .onChange(of: customFileExtension) { _, newValue in
+                            let sanitized = FileCreator.sanitizeExtension(newValue)
+                            customFileExtension = sanitized
+                            FileCreator.customFileExtension = sanitized
+                        }
+
+                    Button(QuickPodText.text(zh: "创建自定义文件", en: "Create custom file")) {
+                        FileCreator.customFileExtension = FileCreator.sanitizeExtension(customFileExtension)
+                        customFileExtension = FileCreator.customFileExtension
+                        FileCreator().create(.custom) { result in
+                            switch result {
+                            case .success(let url):
+                                fileStatusMessage = QuickPodText.text(zh: "\(url.lastPathComponent) 已创建到桌面", en: "\(url.lastPathComponent) was created on the Desktop")
+                            case .failure(let error):
+                                fileStatusMessage = error.localizedDescription
+                            }
+                        }
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .buttonStyle(LiquidPillButtonStyle(isSelected: false))
+                    .disabled(FileCreator.sanitizeExtension(customFileExtension).isEmpty)
+                }
+                Text(
+                    QuickPodText.text(
+                        zh: "输入后缀名即可，例如 `log`、`json`、`todo`。Quick Switcher 里也会同步显示。",
+                        en: "Enter an extension like `log`, `json`, or `todo`. Quick Switcher will mirror it too."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
                 if let fileStatusMessage {
                     Text(fileStatusMessage)
                         .font(.system(size: 11))
@@ -210,21 +284,24 @@ struct MainWindowView: View {
     }
 
     private var reminderSettingsSection: some View {
-        settingsSection("休息提醒", subtitle: "选择提醒间隔，开启后会按周期发送系统通知") {
+        settingsSection(QuickPodText.text(zh: "休息提醒", en: "Break reminders"), subtitle: QuickPodText.text(zh: "选择提醒间隔，开启后会按周期发送系统通知", en: "Choose an interval and QuickPod will remind you on schedule")) {
             MiniToggleRow(
-                title: "启用休息提醒",
-                subtitle: breakReminder.isActive ? "每 \(breakReminder.intervalMinutes) 分钟提醒" : "关闭",
+                title: QuickPodText.text(zh: "启用休息提醒", en: "Enable break reminders"),
+                subtitle: breakReminder.isActive
+                    ? QuickPodText.text(zh: "每 \(breakReminder.intervalMinutes) 分钟提醒", en: "Remind me every \(breakReminder.intervalMinutes) minutes")
+                    : QuickPodText.text(zh: "关闭", en: "Off"),
                 isOn: breakReminder.isActive,
                 action: { breakReminder.toggle() }
             )
             thinDivider
             VStack(alignment: .leading, spacing: 8) {
-                Text("提醒间隔")
+                Text(QuickPodText.text(zh: "提醒间隔", en: "Reminder interval"))
                     .font(.system(size: 12, weight: .medium))
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                     ForEach(BreakReminder.intervalOptions, id: \.self) { minutes in
-                        Button("\(minutes) 分钟") {
+                        Button(QuickPodText.text(zh: "\(minutes) 分钟", en: "\(minutes) min")) {
                             breakReminder.intervalMinutes = minutes
+                            customReminderMinutes = "\(minutes)"
                             if breakReminder.isActive {
                                 breakReminder.restart()
                             }
@@ -237,56 +314,81 @@ struct MainWindowView: View {
             }
             .padding(12)
             thinDivider
-            MiniButtonRow(title: "发送测试通知", subtitle: "立即发送一条通知，确认通知系统正常") {
+            HStack(spacing: 10) {
+                TextField(QuickPodText.text(zh: "自定义分钟数", en: "Custom minutes"), text: $customReminderMinutes)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+
+                Button(QuickPodText.text(zh: "应用", en: "Apply")) {
+                    applyCustomReminderInterval()
+                }
+                .font(.system(size: 12, weight: .medium))
+                .buttonStyle(LiquidPillButtonStyle(isSelected: false))
+
+                Button(QuickPodText.text(zh: "1 分钟测试", en: "1 min test")) {
+                    customReminderMinutes = "1"
+                    applyCustomReminderInterval()
+                }
+                .font(.system(size: 12, weight: .medium))
+                .buttonStyle(LiquidPillButtonStyle(isSelected: breakReminder.intervalMinutes == 1))
+            }
+            .padding(12)
+            if let reminderStatusMessage {
+                Text(reminderStatusMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            thinDivider
+            MiniButtonRow(title: QuickPodText.text(zh: "发送测试通知", en: "Send test notification"), subtitle: QuickPodText.text(zh: "立即发送一条通知，确认通知系统正常", en: "Send one now to verify the notification pipeline")) {
                 sendTestNotification()
             }
         }
     }
 
     private func sendTestNotification() {
-        fileStatusMessage = "正在发送测试通知..."
-        
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
+        reminderStatusMessage = QuickPodText.text(zh: "正在发送测试通知并弹出预览卡片...", en: "Sending a test notification and showing the preview card...")
+        breakReminder.sendTestNotification { outcome in
             DispatchQueue.main.async {
-                switch settings.authorizationStatus {
-                case .authorized, .provisional, .ephemeral:
-                    let content = UNMutableNotificationContent()
-                    content.title = "QuickPod 测试通知"
-                    content.body = "通知系统正常工作！"
-                    content.sound = .default
-                    let request = UNNotificationRequest(
-                        identifier: "QuickPod.testNotification",
-                        content: content,
-                        trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.5, repeats: false)
-                    )
-                    UNUserNotificationCenter.current().add(request)
-                    self.fileStatusMessage = "测试通知已发送，请检查通知中心"
-                case .notDetermined:
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                        DispatchQueue.main.async {
-                            if granted {
-                                self.sendTestNotification()
-                            } else {
-                                self.fileStatusMessage = "通知权限被拒绝，请在系统设置中开启"
-                            }
-                        }
-                    }
-                case .denied:
-                    self.fileStatusMessage = "通知权限已关闭，请在系统设置中开启"
-                @unknown default:
-                    self.fileStatusMessage = "无法发送测试通知"
-                }
+                self.reminderStatusMessage = outcome.message
+                self.permissionManager.checkNotificationPermission()
             }
+        }
+    }
+
+    private func applyCustomReminderInterval() {
+        let trimmed = customReminderMinutes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let minutes = Int(trimmed), minutes > 0, minutes <= 720 else {
+            reminderStatusMessage = QuickPodText.text(
+                zh: "请输入 1 到 720 之间的分钟数。",
+                en: "Enter a value between 1 and 720 minutes."
+            )
+            return
+        }
+
+        breakReminder.intervalMinutes = minutes
+        reminderStatusMessage = QuickPodText.text(
+            zh: "提醒间隔已改成 \(minutes) 分钟。",
+            en: "The reminder interval is now \(minutes) minutes."
+        )
+        if breakReminder.isActive {
+            breakReminder.restart()
+            reminderStatusMessage = QuickPodText.text(
+                zh: "提醒已重新开始，将在 \(minutes) 分钟后弹出。",
+                en: "The reminder restarted and will appear again in \(minutes) minutes."
+            )
         }
     }
 
     @State private var flashedKey: String?
 
     private var shortcutSection: some View {
-        settingsSection("快捷键", subtitle: "录制用于呼出快捷菜单的快捷键，按住显示，松手关闭") {
+        settingsSection(QuickPodText.text(zh: "快捷键", en: "Shortcut"), subtitle: QuickPodText.text(zh: "录制用于呼出快捷菜单的快捷键，按住显示，松手关闭", en: "Record the hotkey used to show the quick switcher")) {
             VStack(spacing: 0) {
                 HStack {
-                    Text("打开快捷菜单")
+                    Text(QuickPodText.text(zh: "打开快捷菜单", en: "Open quick switcher"))
                         .font(.system(size: 12, weight: .medium))
                     Spacer()
                     Button(action: {
@@ -300,7 +402,7 @@ struct MainWindowView: View {
                                     .frame(width: 6, height: 6)
                                     .opacity(0.6)
                             }
-                            Text(isRecordingShortcut ? "按下新快捷键..." : GlobalHotkey.displayString)
+                            Text(isRecordingShortcut ? QuickPodText.text(zh: "按下新快捷键...", en: "Press new shortcut...") : GlobalHotkey.displayString)
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundColor(isRecordingShortcut ? .orange : .primary)
                         }
@@ -362,25 +464,27 @@ struct MainWindowView: View {
     }
 
     private var permissionSection: some View {
-        settingsSection("权限管理", subtitle: "确保以下权限已正确配置") {
+        settingsSection(QuickPodText.text(zh: "权限管理", en: "Permissions"), subtitle: QuickPodText.text(zh: "确保以下权限已正确配置", en: "Review the permissions relevant to this build")) {
             VStack(spacing: 0) {
                 PermissionRow(
-                    title: "通知权限",
-                    description: "用于休息提醒通知",
+                    title: QuickPodText.text(zh: "通知权限", en: "Notifications"),
+                    description: permissionManager.notificationDebugSummary.isEmpty
+                        ? QuickPodText.text(zh: "用于休息提醒通知", en: "Used for break reminders and status notifications")
+                        : permissionManager.notificationDebugSummary,
                     status: permissionManager.notificationPermission,
                     action: { permissionManager.openNotificationSettings() }
                 )
                 thinDivider
                 PermissionRow(
-                    title: "辅助功能",
-                    description: "用于快捷键全局监听",
+                    title: QuickPodText.text(zh: "辅助功能（可选）", en: "Accessibility (optional)"),
+                    description: QuickPodText.text(zh: "当前全局快捷键不依赖此权限；仅对某些可选键盘监听场景有帮助", en: "The current global hotkey does not require this permission. It only helps with some optional keyboard-monitoring scenarios."),
                     status: permissionManager.accessibilityPermission,
                     action: { permissionManager.openAccessibilitySettings() }
                 )
                 thinDivider
                 PermissionRow(
-                    title: "开机启动",
-                    description: "登录时自动启动",
+                    title: QuickPodText.text(zh: "开机启动", en: "Launch at login"),
+                    description: QuickPodText.text(zh: "登录时自动启动", en: "Start automatically after login"),
                     status: permissionManager.loginItemPermission,
                     action: { permissionManager.openLoginItemsSettings() }
                 )
@@ -389,19 +493,45 @@ struct MainWindowView: View {
     }
 
     private var appSettingsSection: some View {
-        settingsSection("应用设置", subtitle: nil) {
+        settingsSection(QuickPodText.text(zh: "应用设置", en: "App settings"), subtitle: nil) {
             MiniToggleRow(
-                title: "开机启动",
-                subtitle: loginItem.isEnabled ? "已开启" : "关闭",
+                title: QuickPodText.text(zh: "开机启动", en: "Launch at login"),
+                subtitle: loginItem.isEnabled ? QuickPodText.text(zh: "已开启", en: "Enabled") : QuickPodText.text(zh: "关闭", en: "Off"),
                 isOn: loginItem.isEnabled,
                 action: { loginItem.toggle() }
             )
             thinDivider
-            MiniButtonRow(title: "检查更新", subtitle: "检查 QuickPod 是否有新版本") {
+            PickerRow(
+                title: QuickPodText.text(zh: "语言", en: "Language"),
+                selection: Binding(
+                    get: { AppLanguage(rawValue: appLanguageRawValue) ?? .system },
+                    set: { newValue in
+                        appLanguageRawValue = newValue.rawValue
+                        permissionManager.checkAllPermissions()
+                    }
+                ),
+                options: [
+                    QuickPodText.text(zh: "跟随系统", en: "System"),
+                    "中文",
+                    "English"
+                ]
+            )
+            thinDivider
+            InfoRow(
+                title: QuickPodText.text(zh: "外观", en: "Appearance"),
+                detail: QuickPodText.text(zh: "固定浅色模式", en: "Light mode only")
+            )
+            thinDivider
+            InfoRow(
+                title: QuickPodText.text(zh: "更新状态", en: "Update status"),
+                detail: updateStatusSummary
+            )
+            thinDivider
+            MiniButtonRow(title: QuickPodText.text(zh: "检查更新", en: "Check for updates"), subtitle: QuickPodText.text(zh: "检查 QuickPod 是否有新版本", en: "Check whether a newer QuickPod build is available")) {
                 UpdateChecker.shared.checkForUpdates(showAlert: true)
             }
             thinDivider
-            MiniButtonRow(title: "退出 QuickPod", subtitle: "关闭菜单栏常驻进程") {
+            MiniButtonRow(title: QuickPodText.text(zh: "退出 QuickPod", en: "Quit QuickPod"), subtitle: QuickPodText.text(zh: "关闭菜单栏常驻进程", en: "Close the persistent menu bar process")) {
                 NSApplication.shared.terminate(nil)
             }
         }
@@ -435,6 +565,22 @@ struct MainWindowView: View {
             .fill(Color.primary.opacity(0.08))
             .frame(height: 1)
             .padding(.leading, 16)
+    }
+
+    private var updateStatusSummary: String {
+        if updateChecker.isChecking {
+            return QuickPodText.text(zh: "检查中…", en: "Checking…")
+        }
+
+        guard let lastCheckedAt = updateChecker.lastCheckedAt else {
+            return QuickPodText.text(zh: "尚未检查", en: "Not checked yet")
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let time = formatter.string(from: lastCheckedAt)
+        let source = updateChecker.lastCheckSource?.displayName ?? QuickPodText.text(zh: "未知来源", en: "Unknown source")
+        return QuickPodText.text(zh: "\(time) · \(source)", en: "\(time) · \(source)")
     }
 
 }
@@ -552,6 +698,41 @@ struct PermissionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(LiquidRowButtonStyle())
+    }
+}
+
+struct PickerRow<Value: Hashable>: View {
+    let title: String
+    let selection: Binding<Value>
+    let options: [String]
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
+            Spacer()
+            Picker(title, selection: selection) {
+                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                    Text(option).tag(tag(for: index))
+                }
+            }
+            .labelsHidden()
+            .frame(width: 172)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func tag(for index: Int) -> Value {
+        switch Value.self {
+        case is AppTheme.Type:
+            return AppTheme.allCases[index] as! Value
+        case is AppLanguage.Type:
+            return AppLanguage.allCases[index] as! Value
+        default:
+            fatalError("Unsupported picker value type")
+        }
     }
 }
 

@@ -45,6 +45,7 @@ swiftc \
     "$SRC_DIR/LoginItemManager.swift" \
     "$SRC_DIR/QuickSwitcher.swift" \
     "$SRC_DIR/PermissionManager.swift" \
+    "$SRC_DIR/AppPreferences.swift" \
     "$SRC_DIR/UpdateChecker.swift"
 
 echo "  编译完成: $MACOS_DIR/$APP_NAME"
@@ -58,7 +59,12 @@ if [ -f "$PROJECT_DIR/Sources/QuickPod/AppIcon.icns" ]; then
 fi
 
 echo "=== 签名 ==="
-codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || echo "  (签名跳过，开发模式也可运行)"
+if [ -n "$QUICKPOD_CODESIGN_IDENTITY" ]; then
+    codesign --force --deep --sign "$QUICKPOD_CODESIGN_IDENTITY" "$APP_BUNDLE"
+else
+    echo "  未提供 QUICKPOD_CODESIGN_IDENTITY，使用 ad-hoc 签名绑定整个 App Bundle"
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 echo ""
 echo "✅ 构建完成: $APP_BUNDLE"

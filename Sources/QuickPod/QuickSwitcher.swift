@@ -230,37 +230,39 @@ final class QuickSwitcherController: ObservableObject {
     private func rootItems() -> [QuickSwitcherItem] {
         [
             QuickSwitcherItem(
-                title: "防睡眠",
-                subtitle: (NSApp.delegate as? AppDelegate)?.antiSleep.isActive == true ? "已开启" : "防止休眠",
+                title: QuickPodText.text(zh: "防睡眠", en: "Anti-sleep"),
+                subtitle: (NSApp.delegate as? AppDelegate)?.antiSleep.isActive == true
+                    ? QuickPodText.text(zh: "已开启", en: "Enabled")
+                    : QuickPodText.text(zh: "防止休眠", en: "Keep Mac awake"),
                 icon: "moon.zzz.fill",
                 kind: .action
             ) {
                 (NSApp.delegate as? AppDelegate)?.antiSleep.toggle()
             },
             QuickSwitcherItem(
-                title: "屏幕清洁",
-                subtitle: screenCleanerState.isActive ? "退出" : "全屏清洁",
+                title: QuickPodText.text(zh: "屏幕清洁", en: "Screen cleaner"),
+                subtitle: screenCleanerState.isActive ? QuickPodText.text(zh: "退出", en: "Exit") : QuickPodText.text(zh: "全屏清洁", en: "Full-screen cleaner"),
                 icon: "sparkles",
                 kind: .action
             ) { [weak self] in
                 self?.activateScreenCleaner()
             },
             QuickSwitcherItem(
-                title: "休息提醒",
+                title: QuickPodText.text(zh: "休息提醒", en: "Break reminders"),
                 subtitle: nil,
                 icon: "timer",
                 kind: .submenu(.breakPicker),
                 action: nil
             ),
             QuickSwitcherItem(
-                title: "新建文件",
+                title: QuickPodText.text(zh: "新建文件", en: "Create file"),
                 subtitle: nil,
                 icon: "doc.badge.plus",
                 kind: .submenu(.filePicker),
                 action: nil
             ),
             QuickSwitcherItem(
-                title: "设置",
+                title: QuickPodText.text(zh: "设置", en: "Settings"),
                 subtitle: nil,
                 icon: "gearshape",
                 kind: .action
@@ -269,7 +271,7 @@ final class QuickSwitcherController: ObservableObject {
                 (NSApp.delegate as? AppDelegate)?.showMainWindowAgain()
             },
             QuickSwitcherItem(
-                title: "退出",
+                title: QuickPodText.text(zh: "退出", en: "Quit"),
                 subtitle: nil,
                 icon: "power",
                 kind: .action
@@ -281,10 +283,11 @@ final class QuickSwitcherController: ObservableObject {
 
     private func breakItems() -> [QuickSwitcherItem] {
         let intervals: [(String, Int)] = [
-            ("15 分钟", 15),
-            ("30 分钟", 30),
-            ("45 分钟", 45),
-            ("60 分钟", 60)
+            (QuickPodText.text(zh: "1 分钟测试", en: "1 min test"), 1),
+            (QuickPodText.text(zh: "15 分钟", en: "15 min"), 15),
+            (QuickPodText.text(zh: "30 分钟", en: "30 min"), 30),
+            (QuickPodText.text(zh: "45 分钟", en: "45 min"), 45),
+            (QuickPodText.text(zh: "60 分钟", en: "60 min"), 60)
         ]
         return intervals.map { label, minutes in
             QuickSwitcherItem(
@@ -297,7 +300,7 @@ final class QuickSwitcherController: ObservableObject {
             }
         } + [
             QuickSwitcherItem(
-                title: "停止提醒",
+                title: QuickPodText.text(zh: "停止提醒", en: "Stop reminders"),
                 subtitle: nil,
                 icon: "bell.slash.fill",
                 kind: .action
@@ -308,10 +311,10 @@ final class QuickSwitcherController: ObservableObject {
     }
 
     private func fileItems() -> [QuickSwitcherItem] {
-        FileCreator.FileType.allCases.map { type in
+        FileCreator.availableFileTypes.map { type in
             QuickSwitcherItem(
                 title: type.shortName,
-                subtitle: nil,
+                subtitle: type == .custom ? type.displayName : nil,
                 icon: iconForFileType(type),
                 kind: .action
             ) { [weak self] in
@@ -327,6 +330,7 @@ final class QuickSwitcherController: ObservableObject {
         case .docx: return "doc.richtext"
         case .xlsx: return "tablecells"
         case .pptx: return "rectangle.on.rectangle"
+        case .custom: return "doc.badge.gearshape"
         }
     }
 
@@ -335,10 +339,16 @@ final class QuickSwitcherController: ObservableObject {
     private func activateScreenCleaner() {
         if screenCleanerState.isActive {
             screenCleanerState.deactivate()
-            sendTransientNotification(title: "屏幕清洁已退出", body: "按任意键或点击即可退出")
+            sendTransientNotification(
+                title: QuickPodText.text(zh: "屏幕清洁已退出", en: "Screen cleaner closed"),
+                body: QuickPodText.text(zh: "按任意键或点击即可退出", en: "Press any key or click to exit")
+            )
         } else {
             screenCleanerState.onDeactivateExtra = nil
-            sendTransientNotification(title: "屏幕清洁已开启", body: "按任意键或点击即可退出")
+            sendTransientNotification(
+                title: QuickPodText.text(zh: "屏幕清洁已开启", en: "Screen cleaner enabled"),
+                body: QuickPodText.text(zh: "按任意键或点击即可退出", en: "Press any key or click to exit")
+            )
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.screenCleanerState.activate()
             }
@@ -353,14 +363,12 @@ final class QuickSwitcherController: ObservableObject {
             case .authorized, .provisional, .ephemeral:
                 DispatchQueue.main.async {
                     reminder.start(withInterval: minutes)
-                    self.sendTransientNotification(title: "提醒已设置", body: "将在 \(minutes) 分钟后提醒您休息")
                 }
             case .notDetermined:
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
                     DispatchQueue.main.async {
                         if granted {
                             reminder.start(withInterval: minutes)
-                            self.sendTransientNotification(title: "提醒已设置", body: "将在 \(minutes) 分钟后提醒您休息")
                         } else {
                             self.showNotificationPermissionAlert()
                         }
@@ -379,10 +387,13 @@ final class QuickSwitcherController: ObservableObject {
     private func showNotificationPermissionAlert() {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "需要通知权限"
-        alert.informativeText = "QuickPod 需要通知权限来发送休息提醒。请在\"系统设置 > 通知\"中允许 QuickPod。"
-        alert.addButton(withTitle: "打开系统设置")
-        alert.addButton(withTitle: "稍后")
+        alert.messageText = QuickPodText.text(zh: "需要通知权限", en: "Notification permission needed")
+        alert.informativeText = QuickPodText.text(
+            zh: "QuickPod 需要通知权限来发送休息提醒。请在\"系统设置 > 通知\"中允许 QuickPod。",
+            en: "QuickPod needs notification permission for break reminders. Please allow it in System Settings > Notifications."
+        )
+        alert.addButton(withTitle: QuickPodText.text(zh: "打开系统设置", en: "Open settings"))
+        alert.addButton(withTitle: QuickPodText.text(zh: "稍后", en: "Later"))
         if alert.runModal() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.notifications")!)
         }
@@ -391,13 +402,13 @@ final class QuickSwitcherController: ObservableObject {
     private func promptForFileCreation(type: FileCreator.FileType) {
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "新建 \(type.shortName)"
-        alert.informativeText = "输入文件名后将直接创建到桌面。"
-        alert.addButton(withTitle: "创建")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = QuickPodText.text(zh: "新建 \(type.shortName)", en: "Create \(type.shortName)")
+        alert.informativeText = QuickPodText.text(zh: "输入文件名后将直接创建到桌面。", en: "Enter a file name. The file will be created directly on the Desktop.")
+        alert.addButton(withTitle: QuickPodText.text(zh: "创建", en: "Create"))
+        alert.addButton(withTitle: QuickPodText.text(zh: "取消", en: "Cancel"))
 
         let textField = SelectableTextField(string: FileCreator.defaultFileName)
-        textField.placeholderString = "文件名"
+        textField.placeholderString = QuickPodText.text(zh: "文件名", en: "File name")
         textField.frame = NSRect(x: 0, y: 0, width: 240, height: 24)
         textField.isSelectable = true
         alert.accessoryView = textField
@@ -415,10 +426,13 @@ final class QuickSwitcherController: ObservableObject {
         switch result {
         case .success(let url):
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
-            sendTransientNotification(title: "文件已创建", body: "\(url.lastPathComponent) 已保存到桌面")
+            sendTransientNotification(
+                title: QuickPodText.text(zh: "文件已创建", en: "File created"),
+                body: QuickPodText.text(zh: "\(url.lastPathComponent) 已保存到桌面", en: "\(url.lastPathComponent) was saved to the Desktop")
+            )
         case .failure(let error):
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-            sendTransientNotification(title: "创建失败", body: error.localizedDescription)
+            sendTransientNotification(title: QuickPodText.text(zh: "创建失败", en: "Creation failed"), body: error.localizedDescription)
         }
     }
 

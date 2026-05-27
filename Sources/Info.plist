@@ -17,15 +17,15 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1</string>
+    <string>1.2</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>
-    <string>QuickPod 需要辅助功能权限来注册全局快捷键和执行快捷操作。</string>
+    <string>QuickPod 只会在需要时请求相关权限，用于通知提醒、可选键盘监听与快捷操作。</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSUserNotificationAlertStyle</key>

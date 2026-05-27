@@ -4,6 +4,7 @@ import UserNotifications
 
 class AntiSleepManager: ObservableObject {
     static let statusChangedNotification = Notification.Name("com.quickpod.antisleep.statusChanged")
+    private static let managedProcessIDKey = "QuickPod.managedCaffeinatePID"
     
     // 会话时长选项
     enum SessionDuration: Int, CaseIterable {
@@ -38,6 +39,10 @@ class AntiSleepManager: ObservableObject {
     private var process: Process?
     private var sessionTimer: Timer?
     private var startTime: Date?
+
+    init() {
+        cleanupManagedProcessIfNeeded()
+    }
     
     func toggle() {
         if isActive {
@@ -48,6 +53,7 @@ class AntiSleepManager: ObservableObject {
     }
     
     func activate(withDuration duration: SessionDuration) {
+        terminateManagedProcessIfNeeded(sendNotification: false)
         sessionDuration = duration
         startTime = Date()
         remainingSeconds = duration.durationSeconds
@@ -69,6 +75,7 @@ class AntiSleepManager: ObservableObject {
         do {
             try p.run()
             process = p
+            UserDefaults.standard.set(p.processIdentifier, forKey: Self.managedProcessIDKey)
             isActive = true
             
             // 如果不是无限时长，启动定时器更新剩余时间
@@ -76,7 +83,12 @@ class AntiSleepManager: ObservableObject {
                 startSessionTimer()
             }
             
-            sendNotification(title: "防睡眠已开启", body: duration == .indefinite ? "Mac 将保持唤醒" : "\(duration.displayName) 后自动关闭")
+            sendNotification(
+                title: QuickPodText.text(zh: "防睡眠已开启", en: "Anti-sleep enabled"),
+                body: duration == .indefinite
+                    ? QuickPodText.text(zh: "Mac 将保持唤醒", en: "Your Mac will stay awake")
+                    : QuickPodText.text(zh: "\(duration.displayName) 后自动关闭", en: "Will turn off after \(duration.displayName)")
+            )
             notifyStatusChanged()
         } catch {
             print("[QuickPod] 防睡眠启动失败: \(error.localizedDescription)")
@@ -98,17 +110,7 @@ class AntiSleepManager: ObservableObject {
     }
     
     func deactivate() {
-        process?.terminate()
-        process = nil
-        
-        sessionTimer?.invalidate()
-        sessionTimer = nil
-        
-        startTime = nil
-        remainingSeconds = 0
-        isActive = false
-        sendNotification(title: "防睡眠已关闭", body: "Mac 将正常休眠")
-        notifyStatusChanged()
+        terminateManagedProcessIfNeeded(sendNotification: true)
     }
     
     func getRemainingTimeString() -> String {
@@ -152,5 +154,46 @@ class AntiSleepManager: ObservableObject {
                 object: self
             )
         }
+    }
+
+    func shutdownForTermination() {
+        terminateManagedProcessIfNeeded(sendNotification: false)
+    }
+
+    private func terminateManagedProcessIfNeeded(sendNotification shouldNotify: Bool) {
+        process?.terminate()
+        process = nil
+
+        if let persistedPID = persistedManagedPID(), persistedPID > 0 {
+            kill(pid_t(persistedPID), SIGTERM)
+        }
+
+        UserDefaults.standard.removeObject(forKey: Self.managedProcessIDKey)
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+        startTime = nil
+        remainingSeconds = 0
+
+        let wasActive = isActive
+        isActive = false
+
+        if shouldNotify && wasActive {
+            sendNotification(
+                title: QuickPodText.text(zh: "防睡眠已关闭", en: "Anti-sleep disabled"),
+                body: QuickPodText.text(zh: "Mac 将正常休眠", en: "Your Mac can sleep normally now")
+            )
+        }
+        notifyStatusChanged()
+    }
+
+    private func cleanupManagedProcessIfNeeded() {
+        guard let pid = persistedManagedPID(), pid > 0 else { return }
+        kill(pid_t(pid), SIGTERM)
+        UserDefaults.standard.removeObject(forKey: Self.managedProcessIDKey)
+    }
+
+    private func persistedManagedPID() -> Int32? {
+        guard UserDefaults.standard.object(forKey: Self.managedProcessIDKey) != nil else { return nil }
+        return Int32(UserDefaults.standard.integer(forKey: Self.managedProcessIDKey))
     }
 }

@@ -1,43 +1,52 @@
 # QuickPod
 
-macOS Menu Bar Productivity Toolkit - Anti-sleep, Break Reminder, Screen Cleaner, Quick Switcher
+QuickPod is a lightweight macOS menu bar utility built for long-running coding sessions, AI agent workflows, and focused desktop work. It combines anti-sleep controls, break reminders, a quick switcher, and desktop file creation in one small status-bar app.
 
-## Features
+[中文说明](README.md) | [Architecture](ARCHITECTURE.md)
 
-### 🔋 Anti-Sleep
-- Prevent Mac from auto-sleep
-- Support timed shutdown (15min/30min/1hour)
-- Real-time status indicator in menu bar
+## Highlights
 
-### ⏰ Break Reminder
-- Customizable reminder intervals
-- System notification and alert window support
-- Postpone by 5/10 minutes
+### Anti-sleep
+- Keep your Mac awake with one click
+- Presets for `15 min / 30 min / 1 hour / indefinite`
+- Clear menu bar state indicator
 
-### 🧹 Screen Cleaner
-- Full-screen black cleaning mode
-- Exit on any key press or click
+### Break reminders
+- Preset intervals plus custom minute values
+- Includes a `1-minute test` shortcut
+- Sends an activation confirmation when reminders start
+- Uses both macOS notifications and a top-right in-app reminder card
+- Supports `5 min` and `10 min` snooze
 
-### ⚡ Quick Switcher
-- Global hotkey to invoke
-- Quick access to frequently used features
+### Quick switcher
+- Global hotkey entry point
+- Keyboard-driven selection flow
+- Fast access to anti-sleep, reminders, screen cleaner, settings, and file creation
 
-### 📝 New File Creator
-- Support TXT, MD, DOCX, XLSX, PPTX
-- Customizable default file name
+### Create files on Desktop
+- Create `TXT / MD / DOCX / XLSX / PPTX`
+- Custom default file name
+- Custom file extension support such as `log`, `json`, or `todo`
 
-### 🔄 Auto Update
-- Check GitHub Releases for updates
-- One-click download
+### Update checking
+- Checks GitHub Releases for the latest version
+- Prefers direct `DMG/ZIP` assets when available
+- Falls back to the GitHub release redirect when the API is rate-limited
 
-## Installation
+## Screenshots
 
-### Method 1: Download DMG (Recommended)
-1. Download the latest version from [Releases](https://github.com/ECdison6227/QuickPod/releases)
-2. Double-click the `.dmg` file
-3. Drag `QuickPod.app` to Applications folder
+![Main window](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/main-window.png)
+![Quick switcher](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/quick-switcher.png)
+![Break reminder popup](https://raw.githubusercontent.com/ECdison6227/QuickPod/main/screenshots/break-reminder.png)
 
-### Method 2: Build from Source
+## Install
+
+### Download a release
+1. Open [Releases](https://github.com/ECdison6227/QuickPod/releases)
+2. Download the latest `.dmg`
+3. Drag `QuickPod.app` into `Applications`
+
+### Build locally
 ```bash
 git clone https://github.com/ECdison6227/QuickPod.git
 cd QuickPod
@@ -45,58 +54,42 @@ cd QuickPod
 open build/QuickPod.app
 ```
 
-## System Requirements
+## Requirements
 
-- macOS 13.0 (Ventura) or later
+- macOS 13 Ventura or later
 
 ## Permissions
 
-QuickPod requires the following permissions:
+QuickPod only requires notification permission for its core reminder flow:
 
-1. **Notification Permission** - For break reminders
-2. **Accessibility** - For global hotkeys
-3. **Full Disk Access** - (Optional) For advanced features
+1. `Notifications`
+Used for break reminders, test notifications, and status confirmations.
 
-## Usage
+2. `Accessibility (optional)`
+The current global hotkey path uses Carbon `RegisterEventHotKey`, so accessibility access is optional and only helps with some extra keyboard-monitoring scenarios.
 
-1. After running, QuickPod appears in the menu bar
-2. Click the menu bar icon to open the quick panel
-3. Click the gear icon to open settings
+3. `Launch at login`
+Optional if you want QuickPod to start automatically after login.
 
 ## Development
 
-### Tech Stack
-- Swift 5.9+
-- SwiftUI
-- AppKit
-- UserNotifications
-- ServiceManagement
-
-### Build
 ```bash
 ./build.sh
-```
-
-### Package DMG
-```bash
 ./create_dmg.sh
 ```
 
 ## Changelog
 
-### v1.0.0 (2026-05-26)
+### v1.2
+- Fixed unstable notification permission detection
+- Added the top-right reminder card
+- Added custom reminder minutes and a 1-minute test flow
+- Added custom file extensions
+- Refreshed screenshots and marketing assets
+
+### v1.0.0
 - Initial release
-- Anti-sleep feature
-- Break reminder
-- Screen cleaner
-- Quick switcher
-- New file templates
-- Auto-update checker
 
 ## License
 
-MIT License
-
-## Contributing
-
-Issues and Pull Requests are welcome!
+MIT

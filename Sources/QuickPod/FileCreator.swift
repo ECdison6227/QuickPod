@@ -30,6 +30,7 @@ class FileCreator {
         case docx = "Word文档.docx"
         case xlsx = "Excel表格.xlsx"
         case pptx = "PPT演示.pptx"
+        case custom = "自定义"
 
         var displayName: String {
             switch self {
@@ -38,6 +39,9 @@ class FileCreator {
             case .docx: return "空白 Word"
             case .xlsx: return "空白 Excel"
             case .pptx: return "空白 PPT"
+            case .custom:
+                let ext = FileCreator.customFileExtension
+                return ext.isEmpty ? "自定义后缀" : "自定义 .\(ext)"
             }
         }
 
@@ -48,15 +52,28 @@ class FileCreator {
             case .docx: return "Word"
             case .xlsx: return "Excel"
             case .pptx: return "PPT"
+            case .custom:
+                let ext = FileCreator.customFileExtension
+                return ext.isEmpty ? "自定义" : ".\(ext)"
             }
         }
     }
 
     /// 用户默认文件名（通过 UserDefaults 持久化）
     static let defaultFileNameKey = "QuickPod.defaultFileName"
+    static let customFileExtensionKey = "QuickPod.customFileExtension"
     static var defaultFileName: String {
         get { UserDefaults.standard.string(forKey: defaultFileNameKey) ?? "新建文件" }
         set { UserDefaults.standard.set(newValue, forKey: defaultFileNameKey) }
+    }
+    static var customFileExtension: String {
+        get { sanitizeExtension(UserDefaults.standard.string(forKey: customFileExtensionKey) ?? "log") }
+        set { UserDefaults.standard.set(sanitizeExtension(newValue), forKey: customFileExtensionKey) }
+    }
+    static var availableFileTypes: [FileType] {
+        FileType.allCases.filter { type in
+            type != .custom || !customFileExtension.isEmpty
+        }
     }
 
     func create(_ type: FileType, completion: @escaping (CreationResult) -> Void = { _ in }) {
@@ -74,13 +91,19 @@ class FileCreator {
         }
 
         let baseName = normalizedBaseName(customBaseName)
-        let ext = (type.rawValue as NSString).pathExtension
+        let ext = resolvedExtension(for: type)
+        if type == .custom && ext.isEmpty {
+            DispatchQueue.main.async {
+                completion(.failure(.templateFailed("自定义文件后缀为空")))
+            }
+            return
+        }
         let fileName = ext.isEmpty ? baseName : "\(baseName).\(ext)"
         let fileURL = desktopURL.appendingPathComponent(fileName)
         let uniqueURL = makeUnique(url: fileURL)
 
         let content = templateContent(for: type)
-        if content.isEmpty && type != .txt {
+        if content.isEmpty && type != .txt && type != .custom {
             DispatchQueue.main.async {
                 completion(.failure(.templateFailed(uniqueURL.lastPathComponent)))
             }
@@ -104,6 +127,27 @@ class FileCreator {
         DispatchQueue.main.async {
             completion(.success(uniqueURL))
         }
+    }
+
+    private func resolvedExtension(for type: FileType) -> String {
+        switch type {
+        case .custom:
+            return Self.customFileExtension
+        default:
+            return (type.rawValue as NSString).pathExtension
+        }
+    }
+
+    static func sanitizeExtension(_ rawValue: String) -> String {
+        let trimmed = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let withoutDot = trimmed.hasPrefix(".") ? String(trimmed.dropFirst()) : trimmed
+        return withoutDot.replacingOccurrences(
+            of: "[^a-z0-9_-]",
+            with: "",
+            options: .regularExpression
+        )
     }
 
     private func normalizedBaseName(_ customBaseName: String?) -> String {
@@ -174,6 +218,8 @@ class FileCreator {
             return minimalXlsx()
         case .pptx:
             return minimalPptx()
+        case .custom:
+            return Data()
         }
     }
 
