@@ -1,0 +1,64 @@
+<mxfile host="app.diagrams.net" modified="2026-06-17T12:00:00.000Z" agent="Mozilla/5.0" etag="quickpod-banner" version="24.0.0" type="device">
+  <diagram name="banner">
+    <mxGraphModel dx="1280" dy="640" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="640" math="0" shadow="1">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="QuickPod" style="text;html=1;align=center;verticalAlign=middle;fontSize=52;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="440" y="35" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="macOS 菜单栏工具箱" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontColor=#6b7280;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="440" y="95" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="menubar" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#374151;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="90" y="170" width="1100" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="logo" value="Q" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10b981;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1028" y="176" width="24" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="feature1" value="防睡眠&lt;br&gt;&lt;font style=&amp;quot;font-size:13px; color:#6b7280&amp;quot;&gt;15/30/60 min · 不限时&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3b82f6;fontSize=19;fontStyle=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="120" y="300" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="feature2" value="休息提醒&lt;br&gt;&lt;font style=&amp;quot;font-size:13px; color:#6b7280&amp;quot;&gt;自定义间隔 · 延后 5/10 min&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#10b981;fontSize=19;fontStyle=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="390" y="300" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="feature3" value="快速切换器&lt;br&gt;&lt;font style=&amp;quot;font-size:13px; color:#6b7280&amp;quot;&gt;全局快捷键 · 方向键选择&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8b5cf6;fontSize=19;fontStyle=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="660" y="300" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="feature4" value="桌面文件创建&lt;br&gt;&lt;font style=&amp;quot;font-size:13px; color:#6b7280&amp;quot;&gt;TXT/MD/DOCX/XLSX/PPTX&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f59e0b;fontSize=19;fontStyle=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="930" y="300" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="case1" value="跑长任务保持唤醒&lt;br&gt;&lt;font style=&amp;quot;font-size:12px; color:#6b7280&amp;quot;&gt;构建 · 下载 · 推理&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6b7280;fontSize=15;fontStyle=1;dashed=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="140" y="480" width="240" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="case2" value="AI Agent 番茄钟&lt;br&gt;&lt;font style=&amp;quot;font-size:12px; color:#6b7280&amp;quot;&gt;25/45 min 提醒&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6b7280;fontSize=15;fontStyle=1;dashed=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="430" y="480" width="240" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="case3" value="讲课 / 演讲循环计时&lt;br&gt;&lt;font style=&amp;quot;font-size:12px; color:#6b7280&amp;quot;&gt;延后继续 · 循环提醒&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6b7280;fontSize=15;fontStyle=1;dashed=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="720" y="480" width="240" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="case4" value="桌面快速创建文件&lt;br&gt;&lt;font style=&amp;quot;font-size:12px; color:#6b7280&amp;quot;&gt;todo.md · log.json&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6b7280;fontSize=15;fontStyle=1;dashed=1;arcSize=6" vertex="1" parent="1">
+          <mxGeometry x="1010" y="480" width="240" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="a1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6b7280;fontSize=14" edge="1" parent="1" source="menubar" target="feature2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6b7280;fontSize=14" edge="1" parent="1" source="feature1" target="case1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6b7280;fontSize=14" edge="1" parent="1" source="feature2" target="case2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6b7280;fontSize=14" edge="1" parent="1" source="feature3" target="case3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6b7280;fontSize=14" edge="1" parent="1" source="feature4" target="case4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="footer" value="for macOS 13+ · Swift + SwiftUI + AppKit" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontColor=#9ca3af;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="440" y="585" width="400" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
